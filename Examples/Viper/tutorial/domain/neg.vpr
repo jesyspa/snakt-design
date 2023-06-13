@@ -1,0 +1,10 @@
+domain Neg {
+    function not(cond: Bool): Bool
+    // axiom ax_Neg { not(true) == false && not(false) == true }
+    axiom ax_neg { forall x: Bool :: not(x) ==> !x}
+}
+
+method TestNeg() {
+    var x: Bool := false
+    assert(not(not(x)) == x)
+}

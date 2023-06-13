@@ -1,0 +1,15 @@
+method iter_fib(n: Int) returns (res:Int)
+    requires 0 <= n
+{    
+    res := 0
+    var i: Int := 0
+    var next: Int := 1
+
+    while (i < n) 
+    {
+        var t: Int := res
+        res := next
+        next := t + next
+        i := i + 1
+    }
+}

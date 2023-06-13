@@ -1,0 +1,4 @@
+domain Either[T, E] {
+    function value(e: Either[T, E]): T
+    function error(e: Either[T, E]): E
+}

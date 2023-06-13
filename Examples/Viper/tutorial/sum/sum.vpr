@@ -1,0 +1,40 @@
+method sum(n: Int) returns (res: Int)
+    requires 0 <= n
+    ensures res == n * (n + 1) / 2 
+{
+    
+    // If we comment the invariants the code won't work,
+    // therefore, we should suggest to implement them!
+
+    res := 0
+
+    var i: Int := 0;
+    while (i <= n)
+        invariant i <= (n + 1) && res == (i - 1) * i / 2
+    {
+        res := res + i
+        i := i + 1
+    }
+}
+
+method recursiveSum(n: Int) returns (res: Int)
+    requires 0 <= n
+    ensures res == n * (n + 1) / 2
+{
+    // Viper does not allow compound expressions!
+    if (n == 0) {
+        res := 0
+    }
+    else {
+        var p: Int := 0;
+        p := recursiveSum(n - 1);
+        res := p + n;
+    }
+}
+
+method clientCode() returns (res: Int) 
+    requires true
+    ensures res == 15
+{
+    res := recursiveSum(5)
+}

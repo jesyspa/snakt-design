@@ -1,0 +1,80 @@
+field next: Ref
+field elem: Int
+
+predicate list(this: Ref) {
+    acc(this.elem) && acc(this.next) &&
+    (this.next != null ==> list(this.next))
+}
+
+method head(this: Ref) returns (res: Int)
+    requires list(this)
+    ensures  list(this)
+{
+    unfold list(this)
+    res := this.elem
+    fold list(this)
+}
+
+method append(this: Ref, e: Int)
+    requires list(this)
+    ensures  list(this)
+{
+    unfold list(this)
+    if(this.next == null) {
+        var n: Ref
+        n := new(*)
+        n.next := null
+        this.elem := e
+        this.next := n
+        fold list(n)
+    } else {
+        append(this.next, e)
+    }
+    fold list(this)
+}
+
+method create() returns (res: Ref)
+    ensures list(res)
+{
+    res := new(*)
+    res.next := null
+    res.elem := 0
+    fold list(res)
+}
+
+method prepend(this: Ref, e: Int) returns (res: Ref)
+
+method concat(this: Ref, that: Ref)
+    requires list(this) && list(that)
+    ensures list(this)
+{
+    if (this != null && this != that) {
+        
+    }
+}
+
+method reverse(this: Ref) returns (res: Ref)
+
+method client() {
+
+    var l1: Ref
+    var l2: Ref
+
+    l1 := create()
+    unfold list(l1)
+
+    l2 := create()
+    unfold list(l2)
+
+    l1.elem := 10
+    l2.elem := 20
+
+    fold list(l1)
+    fold list(l2)
+    concat(l1, l2)
+
+    unfold list(l1)
+
+    assert l1.next != null
+
+}

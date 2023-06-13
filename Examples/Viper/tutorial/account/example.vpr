@@ -1,0 +1,10 @@
+field v: Int
+
+method client(x: Ref) 
+    ensures acc(x.v) && x.v == 10
+{
+    inhale false
+    x.v := 20
+    
+    assert x.v == 20
+}

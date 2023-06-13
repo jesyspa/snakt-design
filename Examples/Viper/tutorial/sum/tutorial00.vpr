@@ -1,0 +1,66 @@
+// This is the classic sum of n positive intergers on Viper.
+// The sum states that sum(n) = 1 + 2 + ... + n == n * (n + 1) / 2
+
+// Notes:
+// * Pre-Condition and Post-Condition makes up the method specification.
+// * Verification of loops also requires specification. The loop body
+// requires an invariant, if omited, then it's always `true`.
+// * Invariants can be multiline as the example shown below, or they can be put in AND (&&)
+
+method recursiveSum(n: Int) returns (res: Int) 
+    requires n >= 0
+    ensures res == n * (n + 1) / 2
+{
+    if (n == 0) {
+        res := 0
+    }
+    else {
+        // Viper does not allow method calls within compound expressions.
+        // res := n + recursiveSum(n - 1) is not a valid expression.
+        var r: Int := 0;
+        r := recursiveSum(n - 1)
+        res := n + r
+    }
+}
+
+method sum(n: Int) returns (res: Int)   // Value returned
+  requires 0 <= n                       // Pre-condition given
+  ensures  res == n * (n + 1) / 2       // Post-condition given
+{
+  res := 0
+  var i: Int := 0;
+  while(i <= n)
+    invariant i <= (n + 1)
+    invariant res == (i - 1) * i / 2
+  {
+    res := res + i
+    i := i + 1
+  }
+}
+
+method callSum() returns (res:Int)
+    ensures res == 15
+{
+    res := sum(5)
+}
+
+method callRecursiveSum() returns (res:Int)
+    ensures res == 15
+{
+    res := recursiveSum(5)
+}
+
+method checkSumImplementation(n: Int) returns (res: Bool)
+    requires 0 <= n
+    ensures res == true
+{
+    res := false;
+
+    var sumNonRecursive: Int := 0;
+    var sumRecursive: Int := 0;
+
+    sumNonRecursive := sum(n)
+    sumRecursive := recursiveSum(n)
+
+    res := sumNonRecursive == sumRecursive
+}

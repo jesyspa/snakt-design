@@ -1,0 +1,140 @@
+// Models Kotlin's IntArray class
+import "exc.vpr"
+import "either.vpr"
+
+field val: Int
+
+domain IntArray {
+    
+    function constructor(size: Int): IntArray
+    function get(a: IntArray, index: Int): Ref
+    function length(a: IntArray): Int
+
+    function first(r: Ref): IntArray
+    function second(r: Ref): Int
+
+    axiom aInjectivity {
+        forall a: IntArray, i: Int :: {get(a, i)} first(get(a, i)) == a && second(get(a, i)) == i
+    }
+
+    axiom aArrayLength {
+        forall a: IntArray :: forall j: Int :: j > 0 && a == constructor(j) ==> length(a) == j
+    }
+
+    axiom aLengthNonNegative {
+        forall a: IntArray :: {length(a)} length(a) > 0
+    }
+
+    axiom aOutOfBound {
+        exists e: Exception :: 
+            (forall a: IntArray :: {length(a)} 
+                (forall i: Int :: {get(a, i)} i >= length(a) ==> get(a, i) == null))
+    }
+}
+
+define untouched(a) forall j: Int :: 0 <= j && j < length(a) ==> get(a, j).val == old(get(a, j).val)
+
+define isMin(i, a, u) forall j: Int :: 0 <= j && j < u ==> get(a, j).val >= get(a, i).val
+
+/***
+public fun IntArray.indexOf(element: Int): Int {
+    for (index in indices) {
+        if (element == this[index]) {
+            return index
+        }
+    }
+    return -1
+} */
+
+
+method indexOf(this: IntArray, element: Int) returns (index: Int)
+    requires forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val) // Access permission
+    ensures forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val) // Access permission
+    ensures forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val == old(get(this, j).val) // Untouched
+    ensures -1 <= index && index < length(this)
+    ensures index == -1 ==> (forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val != element) // If we did not find the element
+    ensures 0 <= index ==> get(this, index).val == element // If we found the element
+{
+    var n: Int
+    var i: Int
+    n := length(this)
+
+    index := -1
+    i := 0
+
+    while (i < n) 
+        invariant forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val)
+        invariant forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val == old(get(this, j).val)
+    {
+        
+        var curr: Int
+        curr := get(this, i).val
+
+        if (curr == element) {
+            index := i
+        }
+    }
+}
+
+method contains(this: IntArray, element: Int) returns (contained: Bool)
+    requires forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val) // Access permission
+    ensures forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val) // Access permission
+    ensures forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val == old(get(this, j).val) // Untouched
+    ensures contained == true ==> exists j: Int :: 0 <= j && j < length(this) && get(this, j).val == element
+    ensures contained == false ==> forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val != element
+{
+    
+    var index: Int
+    index := indexOf(this, element)
+    
+    if (index > -1) {
+        contained := true
+    }
+    else {
+        contained := false
+    }
+}
+
+method client3()
+{
+    
+    var a: IntArray
+    a := constructor(3)
+
+    // Does the array have three elements?
+    assert length(a) == 3
+
+    // Give permission for every cell element
+    inhale forall j: Int :: 0 <= j && j < length(a) ==> acc(get(a, j).val)
+
+    get(a, 0).val := 10
+    get(a, 1).val := 20
+    // get(a, 1).val := 10
+    get(a, 2).val := 30
+
+    assert get(a, 0).val == 10
+    assert get(a, 1).val == 20
+    // assert get(a, 1).val == 10
+    assert get(a, 2).val == 30
+
+    // out of bound?
+    // assert get(a, 3).val == 100
+
+    var indexOfThirty: Int
+    indexOfThirty := indexOf(a, 30)
+
+    assert indexOfThirty == 2
+
+    // assert indexOfThirty == 3 // This will fail!
+
+    var indexOfAnswer: Int
+    indexOfAnswer := indexOf(a, 42)
+    assert indexOfAnswer == -1
+
+    // Trying with IntArray.contains(x)
+    var res: Bool
+    res := contains(a, 42)
+
+    assert res == false
+
+}

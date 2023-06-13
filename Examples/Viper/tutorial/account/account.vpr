@@ -1,0 +1,58 @@
+// `create` returns a fresh account with initial balance 0
+// `deposits` deposits a non-negative amount to an account
+// `transfer` transfers a non-negative amount between two accounts
+
+// Account balances are integers
+
+field balance: Int
+
+method create() returns (account: Ref)
+    ensures acc(account.balance)
+    ensures account.balance == 0
+{
+    account := new(balance)
+    account.balance := 0 // Initialize the bank account to zero
+}
+
+method deposit(account: Ref, amount: Int)
+    requires acc(account.balance) 
+    requires amount >= 0
+    ensures acc(account.balance)
+    ensures account.balance == old(account.balance) + amount
+{
+    account.balance := account.balance + amount
+}
+
+method transfer(sourceAccount: Ref, targetAccount: Ref, amount: Int)
+    requires acc(sourceAccount.balance) && acc(targetAccount.balance)
+    requires amount >= 0
+    requires sourceAccount.balance >= amount // Does the source have enough money to transfer?
+    ensures acc(sourceAccount.balance) && acc(targetAccount.balance)
+    ensures sourceAccount.balance == old(sourceAccount.balance) - amount
+    ensures targetAccount.balance == old(targetAccount.balance) + amount
+{
+    sourceAccount.balance := sourceAccount.balance - amount
+    targetAccount.balance := targetAccount.balance + amount
+}
+
+method client() 
+{
+    var x: Ref
+    var y: Ref
+    var z: Ref
+
+    x := create()
+    y := create()
+    z := create()
+
+    deposit(x, 100) // x has now 100$
+    deposit(y, 200) // y has now 200$
+    deposit(z, 300) // z has now 300$
+
+    transfer(x, y, 100) // move 100$ from x to y
+
+    assert x.balance == 0
+    assert y.balance == 300
+    assert z.balance == 300
+
+}

@@ -1,0 +1,37 @@
+field f: Int
+
+method swap(a: Ref, b: Ref)
+    requires acc(a.f) && acc(b.f)
+    ensures acc(a.f) && acc(b.f)
+    ensures a.f == old(b.f) && b.f == old(a.f)
+{
+    var temp: Int
+    temp := a.f
+    a.f := b.f
+    b.f := temp
+}
+
+method client() {
+
+    var ar: Ref 
+    ar := new(f)
+
+    var br: Ref
+    br := new(f)
+
+    ar.f := 42
+    br.f := 17
+
+    swap(ar, br)
+
+    assert ar.f == 17 && br.f == 42
+
+}
+
+method client2() {
+    var x: Ref
+    x := new(f)
+    x.f := 42
+    
+    swap(x, x)
+}
