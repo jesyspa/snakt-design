@@ -1,8 +1,10 @@
 // Models Kotlin's IntArray class
 import "exc.vpr"
-import "either.vpr"
+// import "either.vpr"
 
 field val: Int
+
+// class Foo(val x: Int, val y: Int)
 
 domain IntArray {
     
@@ -32,39 +34,34 @@ domain IntArray {
     }
 }
 
-define untouched(a) forall j: Int :: 0 <= j && j < length(a) ==> get(a, j).val == old(get(a, j).val)
 
-define isMin(i, a, u) forall j: Int :: 0 <= j && j < u ==> get(a, j).val >= get(a, i).val
-
-/***
-public fun IntArray.indexOf(element: Int): Int {
-    for (index in indices) {
-        if (element == this[index]) {
-            return index
-        }
-    }
-    return -1
-} */
+define access(a)    (forall j: Int :: {get(a, j)} 0 <= j && j < length(a) ==> acc(get(a, j).val, 1/2))
+define untouched(a) (forall j: Int :: 0 <= j && j < length(a) ==> get(a, j).val == old(get(a, j).val))
 
 
 method indexOf(this: IntArray, element: Int) returns (index: Int)
-    requires forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val) // Access permission
-    ensures forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val) // Access permission
-    ensures forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val == old(get(this, j).val) // Untouched
+    requires access(this) // Access permission
+    ensures access(this) // Access permission
+    // ensures untouched(this) // Untouched
     ensures -1 <= index && index < length(this)
     ensures index == -1 ==> (forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val != element) // If we did not find the element
     ensures 0 <= index ==> get(this, index).val == element // If we found the element
 {
+    
     var n: Int
-    var i: Int
     n := length(this)
 
-    index := -1
+    var i: Int
     i := 0
 
+    index := -1
+
     while (i < n) 
-        invariant forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val)
-        invariant forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val == old(get(this, j).val)
+        invariant access(this)
+        invariant 0 <= i && i <= n
+        invariant -1 <= index && index < n
+        invariant index == -1 ==> (forall j: Int :: 0 <= j && j < i ==> get(this, j).val != element)
+        invariant 0 <= index ==> get(this, index).val == element
     {
         
         var curr: Int
@@ -73,13 +70,15 @@ method indexOf(this: IntArray, element: Int) returns (index: Int)
         if (curr == element) {
             index := i
         }
+
+        i := i + 1
     }
 }
 
 method contains(this: IntArray, element: Int) returns (contained: Bool)
-    requires forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val) // Access permission
-    ensures forall j: Int :: 0 <= j && j < length(this) ==> acc(get(this, j).val) // Access permission
-    ensures forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val == old(get(this, j).val) // Untouched
+    requires access(this) // Access permission
+    ensures access(this) // Access permission
+    // ensures untouched(this) // Untouched
     ensures contained == true ==> exists j: Int :: 0 <= j && j < length(this) && get(this, j).val == element
     ensures contained == false ==> forall j: Int :: 0 <= j && j < length(this) ==> get(this, j).val != element
 {

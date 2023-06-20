@@ -1,0 +1,56 @@
+import "./tutorial/int_array/int_array.vpr"
+
+domain HOF {}
+
+domain T {}
+
+predicate notConsumed(f: HOF)
+
+method invoke(f: HOF, param: Int)
+method invokeBoolean(f: HOF, param: Ref) returns (b: Bool)
+
+method consume(f: HOF)
+    requires notConsumed(f)
+
+method fastForEach(this: IntArray, action: HOF)
+    requires access(this)
+    requires notConsumed(action)
+    ensures notConsumed(action)
+{
+    var i: Int
+    i := 0
+
+    var n: Int
+    n := length(this)
+
+    while (i < n) 
+        invariant access(this)
+        invariant 0 <= i && i <= n
+    {
+        var e: Int
+        e := get(this, i).val
+
+        invoke(action, e)
+        i := i + 1
+    }
+
+    // consume(action)
+}
+
+method takeIf(this: Ref, action: HOF) returns (res: Ref, times: Int)
+    requires notConsumed(action)
+    ensures notConsumed(action) && times == 1
+{
+    times := 0
+    
+    var b: Bool
+    b := invokeBoolean(action, this)
+    times := times + 1
+
+    if (b) {
+        res := this
+    }
+    else {
+        res := null
+    }
+}
