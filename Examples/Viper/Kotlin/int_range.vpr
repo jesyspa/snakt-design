@@ -1,0 +1,86 @@
+// https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.ranges/-int-range/
+
+field IntRange_start: Int
+field IntRange_endInclusive: Int
+
+predicate IntRange(this: Ref)
+{
+  acc(this.IntRange_start, 1/2) && acc(this.IntRange_endInclusive, 1/2)
+}
+
+predicate IntRange_Iterator(this: Ref)
+{
+  acc(this.IntRange_start) && acc(this.IntRange_endInclusive, 1/2)
+}
+
+function IntRange_get_start(this: Ref): Int
+  requires IntRange(this)
+{
+  unfolding IntRange(this) in this.IntRange_start
+}
+
+function IntRange_get_endInclusive(this: Ref): Int
+  requires IntRange(this)
+{
+  unfolding IntRange(this) in this.IntRange_endInclusive
+}
+
+method IntRange_init(start: Int, endInclusive: Int) returns (this: Ref)
+  ensures IntRange(this) 
+  ensures IntRange_get_start(this) == start
+  ensures IntRange_get_endInclusive(this) == endInclusive
+{
+  this := new(IntRange_start, IntRange_endInclusive)
+  this.IntRange_start := start
+  this.IntRange_endInclusive := endInclusive
+  fold IntRange(this)
+}
+
+method IntRange_iterator(this: Ref) returns (iter: Ref)
+  requires IntRange(this)
+  ensures IntRange(this)
+  ensures IntRange_Iterator(iter)
+  ensures IntRange_get_start(this) == IntRange_Iterator_get_start(iter)
+  ensures IntRange_get_endInclusive(this) == IntRange_Iterator_get_endInclusive(iter)
+  ensures IntRange_get_start(this) == old(IntRange_get_start(this))
+  ensures IntRange_get_endInclusive(this) == old(IntRange_get_endInclusive(this))
+{
+  unfold IntRange(this)
+  iter := new(IntRange_start, IntRange_endInclusive)
+  iter.IntRange_start := this.IntRange_start
+  iter.IntRange_endInclusive := this.IntRange_endInclusive
+  fold IntRange(this)
+  fold IntRange_Iterator(iter)
+}
+
+function IntRange_Iterator_get_start(this: Ref): Int
+  requires IntRange_Iterator(this)
+{
+  unfolding IntRange_Iterator(this) in this.IntRange_start
+}
+
+function IntRange_Iterator_get_endInclusive(this: Ref): Int
+  requires IntRange_Iterator(this)
+{
+  unfolding IntRange_Iterator(this) in this.IntRange_endInclusive
+}
+
+function IntRange_Iterator_hasNext(this: Ref): Bool
+  requires IntRange_Iterator(this)
+{
+  unfolding IntRange_Iterator(this) in this.IntRange_endInclusive <= this.IntRange_start
+}
+
+method IntRange_Iterator_next(this: Ref) returns (i: Int)
+  requires IntRange_Iterator(this)
+  requires IntRange_Iterator_hasNext(this)
+  ensures IntRange_Iterator(this)
+  ensures i == old(IntRange_Iterator_get_start(this))
+  ensures IntRange_Iterator_get_start(this) == old(IntRange_Iterator_get_start(this)) + 1
+  ensures IntRange_Iterator_get_endInclusive(this) == old(IntRange_Iterator_get_endInclusive(this))
+{
+  unfold IntRange_Iterator(this)
+  i := this.IntRange_start
+  this.IntRange_start := this.IntRange_start + 1
+  fold IntRange_Iterator(this)
+}

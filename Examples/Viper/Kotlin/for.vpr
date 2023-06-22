@@ -1,0 +1,62 @@
+/* In Kotlin, for loops are compiled down to iterators:
+
+for (x in xs) { e(x) }
+
+is compiled to
+
+var xs_it = xs.iterator()
+while (xs_it.hasNext()) {
+  val x = xs.next();
+  e(x);
+}
+
+In this file, we will show that the function that sums the first n
+positive integers computes the triangular number (n+1)*n/2,
+specifically using the following implementation,
+
+fun sumup(n: Int): Int {
+  var sum = 0
+  for (x in 1..n) {
+    sum += x
+  }
+  return sum
+}
+
+which desugars into
+
+fun sumup(n: Int): Int {
+  var sum = 0
+  var it = range(1, n).iterator()
+  while (it.hasNext()) {
+    val x = it.next()
+    sum += x
+  }
+  return sum
+}
+
+This code can be translated into Viper in a straightforward manner.
+
+*/
+
+import "int_range.vpr"
+
+method sumup(n: Int) returns (ret: Int)
+ensures ret == n * (n + 1) / 2
+{
+  ret := 0
+  var r: Ref
+  r := IntRange_init(1, ret)
+  var it: Ref
+  it := IntRange_iterator(r)
+  assert IntRange_get_start(r) == 1
+  assert IntRange_Iterator_get_start(it) == 1
+  while (IntRange_Iterator_hasNext(it))
+  invariant IntRange_Iterator(it)
+  invariant ret == IntRange_Iterator_get_start(it) * (IntRange_Iterator_get_start(it) - 1) / 2
+  invariant IntRange_Iterator_hasNext(it) || IntRange_Iterator_get_start(it) == IntRange_Iterator_get_endInclusive(it) + 1
+  {
+    var x: Int
+    x := IntRange_Iterator_next(it)
+    ret := ret + x
+  }
+}
