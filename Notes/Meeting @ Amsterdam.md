@@ -41,6 +41,7 @@
 - We should discuss with the Viper team about the encoding we are interested in. Probably they solved already some encoding problem.
 - In the future, we are going to write the transpiler. We should start by giving a look to *Gobra*, and understand how they approach the “transpilation process”.
   - We should start writing a document for mapping Kotlin types into Viper. This task will be assigned to Anton.
+- We may want to speak to *Dmitry Novozhilov* about Kotlin Contracts.
 
 
 
