@@ -102,12 +102,12 @@ a variable.
 
 Exceptions add additional invisible control flow paths.  When an exception is
 thrown, we cannot expect the postcondition of the function to hold, so unless
-we are in a `catch` block there is nothing for us to do.
-In `catch` blocks the situation is harder: pessimistically, we should require
-the postcondition of the catch block to hold between any two function calls (as
+we are in a `try` block there is nothing for us to do.
+In `try` blocks the situation is harder: pessimistically, we should require
+the postcondition of the `try` block to hold between any two function calls (as
 any such calls could throw).
 
-For the first prototype, not supporting catch blocks seems like a reasonable option.
+For the first prototype, not supporting `try` blocks seems like a reasonable option.
 We can model `throw` statements non-termination (or as an error).
 
 ## Note on `inline` functions
