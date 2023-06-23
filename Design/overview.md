@@ -8,7 +8,7 @@ Foreseeable difficulties:
 - How do we deal with permissions? (partially covered in `object-model.md`)
 - How do we translate for loops and other control flow constructs? (`control-flow.md`)
 - How do we guess loop invariants?
-- How do we translate lambdas and higher-order functions?
+- How do we translate lambdas and higher-order functions? (`lambdas.md`)
 - How do we deal with polymorphism?
 
 We are considering the following new contracts:
