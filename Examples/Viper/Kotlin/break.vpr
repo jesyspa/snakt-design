@@ -1,0 +1,18 @@
+/* Checking how well Viper handles gotos out of loops. */
+
+method foo()
+{
+  var n: Int := 0;
+  while (n < 10)
+    invariant 0 <= n
+    invariant n <= 5
+  {
+    n := n + 1;
+    if (n == 6)
+    {
+      goto postloop
+    }
+  }
+  label postloop
+  assert n == 6
+}
