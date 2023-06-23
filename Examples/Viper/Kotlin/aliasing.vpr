@@ -1,0 +1,76 @@
+/* Consider the function
+ * 
+ * class A(f: int)
+ * 
+ * fun aliasing(x: A, y: A): bool {
+ *   y.f = x.f + 1
+ *   return x.f != y.f
+ * }
+ * 
+ * This function will return false when a reference to the same object is passed for
+ * both x and y.  However, Viper does not permit aliasing and thus incorrectly prove
+ * that foo always returns true.
+ */ 
+
+field f: Int
+
+method aliasing_problem(x: Ref, y: Ref) returns (ret: Bool)
+  requires acc(x.f) && acc(y.f)
+  ensures ret
+{
+  y.f := x.f + 1
+  if (x.f == y.f) {
+    ret := false
+  } else {
+    ret := true
+  }
+}
+
+// Alternative approach: inhale permissions before reading, exhale before writing.
+method aliasing_inhale_exhale(x: Ref, y: Ref) returns (ret: Bool)
+{
+  inhale acc(x.f)
+  var n: Int := x.f
+  exhale acc(x.f)
+  inhale acc(y.f)
+  y.f := n + 1
+  var yf: Int := y.f
+  exhale acc(y.f)
+  inhale acc(x.f)
+  var xf: Int := x.f
+  exhale acc(x.f)
+  if (xf == yf) {
+    ret := false
+  } else {
+    ret := true
+  }
+  refute ret
+  refute !ret
+}
+
+/* Consider the following variation:
+ * 
+ * fun aliasing_increment(x: A, y: A)
+ * {
+ *   x.f += 1
+ *   y.f += 1
+ * }
+ * 
+ * It may seem like we should be able to show that `x.f <= old(x.f) + 2.
+ * However, since x.f can change in any way while we've exhaled it, we
+ * cannot be sure of this.
+ */
+
+method aliasing_inhale_exhale_problem(x: Ref, y: Ref)
+{
+  label start
+  inhale acc(x.f)
+  x.f := x.f + 1
+  exhale acc(x.f)
+  inhale acc(y.f)
+  y.f := y.f + 1
+  exhale acc(y.f)
+  inhale acc(x.f)
+  refute x.f <= old[start](x.f) + 2
+  exhale acc(x.f)
+}
