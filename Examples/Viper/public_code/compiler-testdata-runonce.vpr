@@ -1,0 +1,12 @@
+/* Example from https://github.com/JetBrains/kotlin/blob/b1f7b5e9827d4d457cabe1be46e6746196830260/compiler/testData/codegen/box/contracts/forLoop.kt#L8
+ * 
+ * Code:
+ * fun runOnce(action: () -> Unit) {
+ *     contract {
+ *         callsInPlace(action, InvocationKind.EXACTLY_ONCE)
+ *     }
+ *     action()
+ * }
+ * 
+ */
+
