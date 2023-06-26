@@ -1,0 +1,58 @@
+/* Kotlin code:
+ * 
+ * class A(f: Int)
+ * 
+ * fun function_object_impure(fo: A -> Unit): Int {
+ *   val a = new A(0)
+ *   fo(a)
+ *   return a.f
+ * }
+ */
+
+field f: Int
+domain FunctionObject {}
+predicate A(this: Ref) { acc(this.f) }
+
+method invokeFunctionObject_A(this: FunctionObject, a: Ref)
+  requires A(a)
+  ensures A(a)
+
+method function_object_impure(fo: FunctionObject) returns (ret: Int)
+{
+  var a: Ref
+  a := new(f)
+  a.f := 0
+  fold A(a)
+  invokeFunctionObject_A(fo, a)
+  unfold A(a)
+  ret := a.f
+  refute a.f == 0
+}
+
+/* Kotlin code:
+ *
+ * fun function_object_capture(a: A, fo: () -> Unit): Int {
+ *   fo()
+ *   return a.f
+ * }
+ *
+ * In Kotlin, the returned value is not necessary the same as the
+ * value of a.f when function_object_capture is invoked.  However,
+ * Viper assumes non-aliasing and so assumes that fo() does not
+ * change a.f.
+ */
+
+method invokeFunctionObject_Unit(this: FunctionObject)
+
+method function_object_capture(a: Ref, fo: FunctionObject) returns (ret: Int)
+  requires A(a)
+  ensures A(a)
+  ensures unfolding A(a) in a.f == ret
+  // the following line is not true in Kotlin
+  ensures unfolding A(a) in a.f == old(unfolding A(a) in a.f)
+{
+  invokeFunctionObject_Unit(fo)
+  unfold A(a)
+  ret := a.f
+  fold A(a)
+}

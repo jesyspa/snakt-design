@@ -23,7 +23,7 @@ fun Array<T>.indexOf(element: T): Int {
 ```
 
 There's a few things to note here:
-- `Array<T>` and `T` are nullable types.
+- `T` may be a nullable type.
 - `Array<T>` has an associated iterator type and corresponding functions.
 
 There seem to be a number of levels of information that we can have about a reference:
@@ -32,7 +32,7 @@ There seem to be a number of levels of information that we can have about a refe
    but may be useful for e.g. validating smart casts.
 2. The reference belongs to a particular class and hence methods that take a reference
    will have particular behaviour for it.  (Another option is for those methods to take
-   the information as provided by point 1; this may be more compact, really, but it's
+   the information as provided by points 1 or 3; this may be more compact, really, but it's
    not clear it can be used to express all properties (e.g. injectivity, relation between
    different methods)).
 3. The reference belongs to a particular class and has associated fields that we can

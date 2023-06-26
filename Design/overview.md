@@ -8,8 +8,14 @@ Foreseeable difficulties:
 - How do we deal with permissions? (partially covered in `object-model.md`)
 - How do we translate for loops and other control flow constructs? (`control-flow.md`)
 - How do we guess loop invariants? (`invariants.md`)
-- How do we translate lambdas and higher-order functions? (`lambdas.md`)
+- How do we translate lambdas and higher-order functions? (`lambdas.md`, `functions-as-parameters.md`)
 - How do we deal with polymorphism?
+
+Contracts currently in Kotlin:
+- `returns`
+- `x == null` and `x != null`
+- `x is T`
+- `callsInPlace` with invocation kind (`calls-in-place.md`)
 
 We are considering the following new contracts:
 - Collection is non-empty
