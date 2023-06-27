@@ -1,0 +1,34 @@
+/* From https://github.com/LanternPowered/Lantern/blob/ed947a3c58574f513e940800b0094652766a092b/src/main/kotlin/org/lanternpowered/api/ext/LoggerExt.kt#L114
+ *
+ * Not reproducing code; need to figure out licensing risks first.
+ */
+
+import "common.vpr"
+
+field isInfoEnabled: Bool
+predicate Logger(this: Ref) {
+    acc(this.isInfoEnabled)
+}
+
+method toLoggableString(fn: Ref)
+    requires FunctionObject(fn) && FunctionObject_may_escape(fn)
+    ensures FunctionObject(fn)
+    ensures FO_monotone(fn)
+
+method Logger_info(this: Ref, fn: Ref)
+    requires Logger(this)
+    requires FunctionObject(fn)
+    ensures Logger(this)
+    ensures FunctionObject(fn)
+    ensures FO_monotone(fn)
+    ensures FO_call_at_most_once(fn)
+
+{
+    unfold Logger(this)
+    var b: Bool := this.isInfoEnabled
+    fold Logger(this)
+    if (b) {
+        // Expected failure: toLoggableString does not guarantee non-escape.
+        toLoggableString(fn)
+    }
+}

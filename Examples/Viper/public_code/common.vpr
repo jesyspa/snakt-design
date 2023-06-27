@@ -8,6 +8,8 @@ function FunctionObject_get_num_calls(this: Ref): Int
 {
     unfolding FunctionObject(this) in this.FunctionObject_num_calls
 }
+function FunctionObject_may_escape(this: Ref): Bool
+    requires FunctionObject(this)
 
 define FO_monotone(this) (FunctionObject_get_num_calls(this) >= old(FunctionObject_get_num_calls(this)))
 define FO_call_exactly_once(this) (FunctionObject_get_num_calls(this) == old(FunctionObject_get_num_calls(this)) + 1)
