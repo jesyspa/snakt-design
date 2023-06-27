@@ -16,7 +16,7 @@ an assignment to a fresh variable.
 
 One thing to watch out for is the following:
 
-```
+```kotlin
 val y = f() + if (g()) { x } else { 0 }
 ```
 
@@ -24,7 +24,7 @@ It is not enough to extract the `if` expression; the following code is **not** e
 as it reorders the calls to `f` and `g`.  It may thus be best to normalise *all* expressions,
 so that a function or operator is only ever applied to variables.
 
-```
+```kotlin
 val z;
 if (g()) {
   z = x
@@ -46,7 +46,7 @@ the loop; this needs a discussion of its own, so we skip it here.
 Do-while loops are more difficult.  The simplest approach is to turn the loop into a while
 loop, duplicate the loop body, and prepend it to the loop.  In other words, we can translate
 
-```
+```kotlin
 do {
   f()
 } while (g())
@@ -54,7 +54,7 @@ do {
 
 into 
 
-```
+```kotlin
 f()
 while (g()) {
   f()
@@ -64,12 +64,33 @@ while (g()) {
 (Of course, nothing is ever quite so easy: we still need to support `break` and `continue` in
 these loops.)
 
+Another difficulty is side effects in the condition of the loop.  Method calls are not permitted
+in the condition: instead, we can compile
+
+```kotlin
+while (g()) {
+  f()
+}
+```
+
+into 
+
+```kotlin
+var b = g()
+while (b) {
+  f()
+  b = g()
+}
+```
+
+Of course, some care is required to ensure that this translation works well with `break` and `continue`.
+
 ## `for`
 
 For loops can be converted to while loops by making the iterator explicit.
 Specifically,
 
-```
+```kotlin
 for (x in xs) {
   f(x)
 }
@@ -77,7 +98,7 @@ for (x in xs) {
 
 can be converted into
 
-```
+```kotlin
 var xs_it = xs.iterator()
 while (xs_it.hasNext()) {
   val x = xs_it.next()

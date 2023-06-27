@@ -1,0 +1,44 @@
+/* From https://github.com/Kotlin/kotlinx.coroutines/blob/9c1b3afc3bc53b1e6a25a82a66337f606cbf8f2e/kotlinx-coroutines-core/common/src/channels/Channel.kt#L502
+ * 
+ * public inline fun <T> ChannelResult<T>.getOrElse(onFailure: (exception: Throwable?) -> T): T {
+ *     contract {
+ *         callsInPlace(onFailure, InvocationKind.AT_MOST_ONCE)
+ *     }
+ *     return if (holder is ChannelResult.Failed) onFailure(exceptionOrNull()) else holder as T
+ * }
+ */
+
+import "common.vpr"
+
+field ChannelResult_holder: Ref
+predicate ChannelResult(this: Ref) {
+    acc(this.ChannelResult_holder)
+}
+
+method ChannelResult_exceptionOrNull(this: Ref) returns (ret: Ref)
+    requires ChannelResult(this)
+    ensures ChannelResult(this)
+
+
+method ChannelResult_getOrElse(this: Ref, onFailure: Ref) returns (ret: Ref)
+    requires ChannelResult(this)
+    requires FunctionObject(onFailure)
+    ensures ChannelResult(this)
+    ensures FunctionObject(onFailure)
+    ensures FO_call_at_most_once(onFailure)
+    ensures FO_monotone(onFailure)
+{
+    // TODO: need to figure out how to encode inheritance to properly express this.
+    // For now, just making the choice non-deterministic.
+    var b: Bool
+    if (b) {
+        var e: Ref
+        e := ChannelResult_exceptionOrNull(this)
+        // We don't pass anything to invokeFunctionObject as it would have no effect anyway.
+        invokeFunctionObject(onFailure)
+    } else {
+        unfold ChannelResult(this)
+        ret := this.ChannelResult_holder
+        fold ChannelResult(this)
+    }
+}

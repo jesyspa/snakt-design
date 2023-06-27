@@ -1,0 +1,28 @@
+/* From https://github.com/AvailLang/Avail/blob/a144c7fd31801065facee30f22679d6da9c97c02/avail/src/main/kotlin/avail/utility/Loops.kt#L48
+ * 
+ * Not reproducing code; need to figure out licensing risks first.
+ */
+
+import "common.vpr"
+
+method invokeFunctionObject_Bool(fo: Ref) returns (b: Bool)
+    requires FunctionObject(fo)
+    ensures FunctionObject(fo)
+    ensures FO_call_exactly_once(fo)
+
+method loopWhile(lambda: Ref)
+    requires FunctionObject(lambda)
+    ensures FunctionObject(lambda)
+    ensures FO_call_at_least_once(lambda)
+    ensures FO_monotone(lambda)
+{
+    var b: Bool
+    b := invokeFunctionObject_Bool(lambda)
+    label preloop
+    while (b)
+        invariant FunctionObject(lambda)
+        invariant old[preloop](FunctionObject_get_num_calls(lambda)) <= FunctionObject_get_num_calls(lambda)
+    {
+        b := invokeFunctionObject_Bool(lambda)
+    }
+}
