@@ -166,6 +166,12 @@ However, given we are making a tool to provide warnings to the user it may be th
 The class predicates can be built inductively much the same way they are in the heap-based encoding
 of Prusti.
 
+A problem with this approach is that calling a polymorphic function with a primitive as a type parameter
+requires some kind of trick, since the implementation is specified as taking a `Ref`.
+
+More broadly, this overapproximates what kind of things we need to model as references.  Immutable types
+like `Result` can probably be treated as values, and this may make our life easier.
+
 ### Inhale accessibility on read
 
 An alternative approach that permits for aliasing, but can verify much less, is to inhale and exhale

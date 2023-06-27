@@ -1,0 +1,20 @@
+field FunctionObject_num_calls: Int
+predicate FunctionObjectAbstract(this: Ref)
+predicate FunctionObject(this: Ref) {
+    acc(this.FunctionObject_num_calls) && FunctionObjectAbstract(this)
+}
+function FunctionObject_get_num_calls(this: Ref): Int
+    requires FunctionObject(this)
+{
+    unfolding FunctionObject(this) in this.FunctionObject_num_calls
+}
+
+define FO_monotone(this) (FunctionObject_get_num_calls(this) >= old(FunctionObject_get_num_calls(this)))
+define FO_call_exactly_once(this) (FunctionObject_get_num_calls(this) == old(FunctionObject_get_num_calls(this)) + 1)
+define FO_call_at_most_once(this) (FunctionObject_get_num_calls(this) <= old(FunctionObject_get_num_calls(this)) + 1)
+define FO_call_at_least_once(this) (FunctionObject_get_num_calls(this) >= old(FunctionObject_get_num_calls(this)) + 1)
+
+method invokeFunctionObject(this: Ref)
+    requires FunctionObject(this)
+    ensures FunctionObject(this)
+    ensures FO_call_exactly_once(this)

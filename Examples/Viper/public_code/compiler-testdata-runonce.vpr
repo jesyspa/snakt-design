@@ -10,3 +10,12 @@
  * 
  */
 
+import "common.vpr"
+
+method runOnce(action: Ref)
+    requires FunctionObject(action)
+    ensures FunctionObject(action)
+    ensures FO_call_exactly_once(action)
+{
+    invokeFunctionObject(action)
+}

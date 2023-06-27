@@ -1,0 +1,70 @@
+/* From https://github.com/JetBrains/intellij-community/blob/9bfc850efc072025294839e46712ba9bc0986d48/platform/workspace/jps/src/com/intellij/platform/workspace/jps/serialization/impl/LoadingResult.kt#L21
+ *
+ * inline fun <T> JpsFileEntitiesSerializer<*>.runCatchingXmlIssues(body: () -> T): Result<T> {
+ *   contract {
+ *     callsInPlace(body, InvocationKind.EXACTLY_ONCE)
+ *   }
+ *   return try {
+ *     Result.success(body())
+ *   }
+ *   catch (e: JDOMException) {
+ *     Result.failure(e)
+ *   }
+ *   catch (e: IOException) {
+ *     Result.failure(e)
+ *   }
+ * }
+ */
+
+import "common.vpr"
+
+// True for success
+field Result_discriminator: Bool
+field Result_value: Ref
+
+predicate Result(this: Ref)
+{
+    acc(this.Result_discriminator) && acc(this.Result_value)
+}
+
+method Result_new(value: Ref, discriminator: Bool) returns (this: Ref)
+    ensures Result(this)
+{
+    this := new (Result_discriminator, Result_value)
+    this.Result_discriminator := true
+    this.Result_value := value
+    fold Result(this)
+}
+
+method Result_new_success(value: Ref) returns (this: Ref)
+    ensures Result(this)
+{
+    this := Result_new(value, true)
+}
+
+method Result_new_failure(value: Ref) returns (this: Ref)
+    ensures Result(this)
+{
+    this := Result_new(value, false)
+}
+
+// We don't have any idea how to translate try-catch blocks yet; here's one idea,
+// but we probably want something more systematic before we consider it verifiable.
+
+method runCatchingXmlIssues(body: Ref) returns (ret: Ref)
+    requires FunctionObject(body)
+    ensures FunctionObject(body)
+    ensures FO_call_exactly_once(body)
+    ensures FO_monotone(body)
+    ensures Result(ret)
+{
+    invokeFunctionObject(body)
+    var nonDet: Bool
+    if (nonDet) {
+        var invocation_result: Ref
+        ret := Result_new_success(invocation_result)
+    } else {
+        var exception: Ref
+        ret := Result_new_failure(exception)
+    }
+}

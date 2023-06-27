@@ -1,0 +1,39 @@
+/* From https://github.com/Kotlin/kotlinx.coroutines/blob/9c1b3afc3bc53b1e6a25a82a66337f606cbf8f2e/kotlinx-coroutines-core/common/src/selects/SelectUnbiased.kt#L23
+ * 
+ * public suspend inline fun <R> selectUnbiased(crossinline builder: SelectBuilder<R>.() -> Unit): R {
+ *     contract {
+ *         callsInPlace(builder, InvocationKind.EXACTLY_ONCE)
+ *     }
+ *     return UnbiasedSelectImplementation<R>(coroutineContext).run {
+ *         builder(this)
+ *         doSelect()
+ *     }
+ * }
+ */
+
+import "common.vpr"
+
+// Implementing this by hand as follows:
+// - Monomorphise this by treating R as an abstract reference type.
+// - ignore the coroutine context object: we don't have a good model for it yet
+// - inline the call to run
+
+predicate UnbiasedSelectImplementation(this: Ref)
+method UnbiasedSelectImplementation_new() returns (this: Ref)
+    ensures UnbiasedSelectImplementation(this)
+method UnbiasedSelectImplementation_doSelect(this: Ref)
+    requires UnbiasedSelectImplementation(this)
+    ensures UnbiasedSelectImplementation(this)
+
+method selectUnbiased(builder: Ref)
+    requires FunctionObject(builder)
+    ensures FunctionObject(builder)
+    ensures FO_monotone(builder)
+    ensures FO_call_exactly_once(builder)
+{
+    var this: Ref
+    this := UnbiasedSelectImplementation_new()
+    // We do not pass this to the invocation: it would have no effect.
+    invokeFunctionObject(builder)
+    UnbiasedSelectImplementation_doSelect(this)
+}
