@@ -1,0 +1,64 @@
+/* Consider the following Kotlin code:
+ * 
+ * fun consuming(fo: () -> Unit) {
+ *     // ...
+ * }
+ * 
+ * fun nonconsuming(fo: () -> Unit) {
+ *     contract {
+ *         callsInPlace(fo)
+ *     }
+ *     // ...
+ * }
+ * 
+ * fun foo(fo: () -> Unit, go: () -> Unit, b: Bool) {
+ *     contract {
+ *         callsInPlace(fo)
+ *     }
+ * 
+ *     // all of the following are fine:
+ *     nonconsuming(fo)
+ *     nonconsuming(go)
+ *     consuming(go)
+ *     consuming(go)
+ * 
+ *     val ro = if (b) { fo } else { go }
+ * 
+ *     nonconsuming(ro) // okay
+ *     // not okay: consuming(ro)
+ * }
+ * 
+ * Actually, the solution seems to be quite simple: we make a may_escape boolean-valued
+ * function indicating whether a value may escape and annotate functions where it *might*
+ * escape with it.
+ *
+ * This doesn't help us with structures where the value may be stored, but it's a start.
+ */
+
+domain FunctionObject {}
+function may_escape(this: FunctionObject): Bool
+
+method consuming(fo: FunctionObject)
+    requires may_escape(fo)
+
+method nonconsuming(fo: FunctionObject)
+
+method foo(fo: FunctionObject, go: FunctionObject, b: Bool)
+    requires may_escape(go)
+{
+    nonconsuming(fo)
+    nonconsuming(go)
+    consuming(go)
+    consuming(go)
+
+    var ro: FunctionObject
+    if (b) {
+        ro := fo
+    } else {
+        ro := go
+    }
+
+    nonconsuming(ro)
+}
+
+
