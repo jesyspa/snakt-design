@@ -8,53 +8,45 @@ open class A(val foo: Int, val bar: Int) {
 }
 
 // In this case the class B does not ovveride the `foo` and `bar`
-class B(val zig: Int, foo: Int, bar: Int): A(foo, bar) { }
+class B(val zig: Int, foo: Int, bar: Int): A(foo, bar) 
 
-fun testUpperCasting() {
-    
-    val b = B(zig: 10, foo: 20, bar: 30) 
-    val a: A = b as A // Uppercast to its parent
-
-    assert(a.foo == 20)
-}
+// Class hierarchy in the file:
+    ┌───────────┐
+    │           │
+    │    Any    │ Superclass of every Kotlin's classes.
+    │           │
+    └─────▲─────┘
+          │
+    ┌─────┴─────┐
+    │           │
+    │     A     │ Open to extensions. Define two properties: `foo` and `bar`.
+    │           │
+    └─────▲─────┘
+          │
+    ┌─────┴─────┐
+    │           │
+    │     B     │ Closed to extensions. Define one new property: `zig`
+    │           │
+    └───────────┘
 
 */
 
-domain ClassType {
-    
-    function classA(): ClassType
-    function classB(): ClassType
-
-    // Can I cast t1 to t2?
-    function canCast(t1: ClassType, t2: ClassType): Bool
-
-    axiom axCasting {
-        // We can cast B to its parent A
-        forall t1: ClassType, t2: ClassType :: t1 == classA() && t2 == classB() ==> canCast(t2, t1)
-    }
-
-}
-
+field __super: Ref;
 
 field _A_foo: Int;
 field _A_bar: Int;
 
-// Since B is a sub-child of A, it has a super pointer to its parent
-field _B__super: Ref;
-// Be aware: we are not overriding A fields, therefore, an access to B::foo should point to B::super(A)::foo
 field _B_zig: Int;
-
 
 predicate t_class_A(this: Ref) 
 {
-    acc(this._A_foo) && acc(this._A_bar)
+    acc(this._A_foo) && acc(this._A_bar) 
 }
 
 predicate t_class_B(this: Ref)
 {
-    acc(this._B_zig) && acc(this._B__super) && t_class_A(this._B__super)
+    acc(this._B_zig) && acc(this.__super) && t_class_A(this.__super)
 }
-
 
 method _A_new(foo: Int, bar: Int) returns (this: Ref)
     requires true
@@ -62,7 +54,8 @@ method _A_new(foo: Int, bar: Int) returns (this: Ref)
     ensures unfolding t_class_A(this) in this._A_foo == foo
     ensures unfolding t_class_A(this) in this._A_bar == bar
 {
-    this := new(_A_foo, _A_bar)
+    this := new(__super, _A_foo, _A_bar)
+    // this.__super := _Any_new()
     this._A_foo := foo
     this._A_bar := bar
     fold t_class_A(this)
@@ -73,6 +66,16 @@ function _A_sum(this: Ref): Int
     ensures unfolding t_class_A(this) in result == (this._A_foo + this._A_bar)
 {
     unfolding t_class_A(this) in this._A_foo + this._A_bar
+}
+
+method _A_set_foo(this: Ref, foo: Int)
+    requires t_class_A(this)
+    ensures t_class_A(this)
+    ensures unfolding t_class_A(this) in this._A_foo == foo
+{
+    unfold t_class_A(this)
+    this._A_foo := foo
+    fold t_class_A(this)
 }
 
 function _A_get_foo(this: Ref): Int
@@ -93,16 +96,15 @@ method _B_new(zig: Int, foo: Int, bar: Int) returns (this: Ref)
     requires true
     ensures t_class_B(this)
     ensures unfolding t_class_B(this) in this._B_zig == zig
-    ensures unfolding t_class_B(this) in (unfolding t_class_A(this._B__super) in this._B__super._A_foo == foo)
-    ensures unfolding t_class_B(this) in (unfolding t_class_A(this._B__super) in this._B__super._A_bar == bar)
+    ensures unfolding t_class_B(this) in (unfolding t_class_A(this.__super) in this.__super._A_foo == foo)
+    ensures unfolding t_class_B(this) in (unfolding t_class_A(this.__super) in this.__super._A_bar == bar)
 {
-    // Initialize parent of B
-    this := new(_B__super, _B_zig)
+    this := new(__super, _B_zig)
 
     var super: Ref
     super := _A_new(foo, bar)
 
-    this._B__super := super
+    this.__super := super
     this._B_zig := zig
 
     fold t_class_B(this)
@@ -122,16 +124,16 @@ function _B_get_zig(this: Ref): Int
 
 function _B_get_foo(this: Ref): Int
     requires t_class_B(this)
-    ensures unfolding t_class_B(this) in (unfolding t_class_A(this._B__super) in result == this._B__super._A_foo)
+    ensures unfolding t_class_B(this) in (unfolding t_class_A(this.__super) in result == this.__super._A_foo)
 {
-    unfolding t_class_B(this) in (unfolding t_class_A(this._B__super) in this._B__super._A_foo)
+    unfolding t_class_B(this) in (unfolding t_class_A(this.__super) in this.__super._A_foo)
 }
 
 function _B_get_bar(this: Ref): Int
     requires t_class_B(this)
-    ensures unfolding t_class_B(this) in (unfolding t_class_A(this._B__super) in result == this._B__super._A_bar)
+    ensures unfolding t_class_B(this) in (unfolding t_class_A(this.__super) in result == this.__super._A_bar)
 {
-    unfolding t_class_B(this) in (unfolding t_class_A(this._B__super) in this._B__super._A_bar)
+    unfolding t_class_B(this) in (unfolding t_class_A(this.__super) in this.__super._A_bar)
 }
 
 method driver0() 
@@ -141,12 +143,16 @@ method driver0()
 
     var foo: Int
     var bar: Int
+    var sum: Int
 
     foo := _A_get_foo(a)
     bar := _A_get_bar(a)
+    sum := _A_sum(a)
 
     assert foo == 10
     assert bar == 20
+
+    assert sum == 30
 }
 
 method driver1()
@@ -168,4 +174,33 @@ method driver1()
     var bar: Int
     bar := _B_get_bar(b)
     assert bar == 30
+}
+
+/***
+fun testUpperCasting() {
+    
+    val b = B(zig: 10, foo: 20, bar: 30) 
+    val a: A = b as A // Uppercast to its parent
+
+    // The uppercasting should be assumed as correct,
+    // since we are using the output of the frontend
+    // afrter the semantic analysis.
+
+    assert(a.foo == 20)
+}
+*/
+
+method testUpperCasting()
+{
+    var b: Ref
+    b := _B_new(10, 20, 30) // zig, foo, bar
+
+    var a: Ref
+    a := b
+    assume t_class_A(a)
+
+    var foo: Int
+    foo := _A_get_foo(a)
+
+    assert foo == 20
 }
