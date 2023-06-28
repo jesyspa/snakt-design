@@ -4,28 +4,46 @@ The `callsInPlace` construct applies to a parameter `fo` of function type and gu
 1. `fo` is not stored past the duration of the function call; we refer to this as that the variable _does not escape_.
 2. (Optionally) `fo` is called a specific number of times: once, at least once, or at most once.
 
+We can model objects of function type as references with an associated `num_calls` field that is
+incremented every time the function object is invoked.
+
+We use the encoding described in `function-as-parameters.md` for objects of function type.
+
 ## Escape
 
-General thoughts:
-- It's not clear whether escape analysis is best done in Viper or directly on the data flow graph.
-- In Viper, we can represent it as a predicate that we must keep throughout the method.
-  A method call through which the variable can escape consumes this predicate without returning it,
-  making the proof invalid.  This approach has some issues:
-  + This approach is assymetric: when verifying a method `foo` that has this guarantee, we need to
-    take this predicate as a precondition, but when using `foo` this predicate is only necessary
-    if the passed parameter is one for which such an obligation exists.
-  + It thus seems like some kind of data flow analysis may be necessary anyway; what the preconditions
-    of `foo` should be depends on what is passed to it, which is much more dynamic than what we'd like.
-  + Marco Eilers' thesis has some material on the matter of showing more complicated properties
-    than simple correctness.  This may be relevant.
-- There may be an alternative approach that we're simply missing.  It could be useful to ask the
-  Viper folks directly.
+Instead of marking objects that may not escape, we can mark objects that may escape, treating that as a
+precondition for calling functions from which escape is possible.  This precondition does not involve
+ownership, and so can be modelled with an opaque Boolean-valued function.
+
+We need to choose what types do and do not require escape permissions.  There are two possibilities:
+1. Annotate only function objects.  This may mean that casting function objects to `Any` (if Kotlin
+   even allows that?) would require a may-escape precondition.
+2. Annotate all objects.  This involves getting duplicability information for fields; it is unclear
+   how to do this.
+
+It seems like option 1 is likely to be a better trade-off as real-life examples don't generally involve
+casting the function objects.
 
 ## Number of calls
 
 The calls to `fo` should be tracked via a counter to allow us to determine the number of times that
-it is called.
+it is called.  We track this using a counter on the function object.
 
-Some thoughts:
-- It may be worth putting this counter into a reference so we can pass it to the `invoke` method directly.
-- Monotonicity is an important property, and it is not obvious how to deal with this in loop invariants.
+A non-obvious difficulty here is that the counter is monotonically increasing, which we need to make
+sure to specify at all points (e.g. loop invariants).
+
+Note that due to the partial correctness property of Viper, a possible false negative occurs in the
+following:
+
+```kotlin
+fun foo(fo: () -> Unit) {
+  contract {
+    callsInPlace(fo, EXACTLY_ONCE)
+  }
+  while (true) {}
+}
+```
+
+We could partially mitigate this by ending the function with `refute false`, which would ensure that
+Viper cannot verify that `foo` does not terminate.  However, short of requiring a termination proof
+we cannot avoid this entirely.
