@@ -9,15 +9,42 @@
  * }
  */
 
+field FunctionObject_num_calls: Int
+predicate FunctionObjectAbstract(this: Ref)
+predicate FunctionObject(this: Ref) {
+    acc(this.FunctionObject_num_calls) && FunctionObjectAbstract(this)
+}
+function FunctionObject_get_num_calls(this: Ref): Int
+    requires FunctionObject(this)
+{
+    unfolding FunctionObject(this) in this.FunctionObject_num_calls
+}
+function FunctionObject_may_escape(this: Ref): Bool
+    requires FunctionObject(this)
+
+define FO_monotone(this) (FunctionObject_get_num_calls(this) >= old(FunctionObject_get_num_calls(this)))
+define FO_call_exactly_once(this) (FunctionObject_get_num_calls(this) == old(FunctionObject_get_num_calls(this)) + 1)
+define FO_call_at_most_once(this) (FunctionObject_get_num_calls(this) <= old(FunctionObject_get_num_calls(this)) + 1)
+define FO_call_at_least_once(this) (FunctionObject_get_num_calls(this) >= old(FunctionObject_get_num_calls(this)) + 1)
+
+method invokeFunctionObject(this: Ref)
+    requires FunctionObject(this)
+    ensures FunctionObject(this)
+    ensures FO_call_exactly_once(this)
+
 field f: Int
-domain FunctionObject {}
 predicate A(this: Ref) { acc(this.f) }
 
-method invokeFunctionObject_A(this: FunctionObject, a: Ref)
+method invokeFunctionObject_A(this: Ref, a: Ref)
+  requires FunctionObject(this)
   requires A(a)
+  ensures FunctionObject(this)
   ensures A(a)
+  ensures FO_call_exactly_once(this)
 
-method function_object_impure(fo: FunctionObject) returns (ret: Int)
+method function_object_impure(fo: Ref) returns (ret: Int)
+  requires FunctionObject(fo)
+  ensures FunctionObject(fo)
 {
   var a: Ref
   a := new(f)
@@ -42,16 +69,16 @@ method function_object_impure(fo: FunctionObject) returns (ret: Int)
  * change a.f.
  */
 
-method invokeFunctionObject_Unit(this: FunctionObject)
-
-method function_object_capture(a: Ref, fo: FunctionObject) returns (ret: Int)
+method function_object_capture(a: Ref, fo: Ref) returns (ret: Int)
+  requires FunctionObject(fo)
   requires A(a)
+  ensures FunctionObject(fo)
   ensures A(a)
   ensures unfolding A(a) in a.f == ret
   // the following line is not true in Kotlin
   ensures unfolding A(a) in a.f == old(unfolding A(a) in a.f)
 {
-  invokeFunctionObject_Unit(fo)
+  invokeFunctionObject(fo)
   unfold A(a)
   ret := a.f
   fold A(a)
