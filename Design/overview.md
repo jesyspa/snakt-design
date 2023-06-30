@@ -9,7 +9,9 @@ Foreseeable difficulties:
 - How do we translate for loops and other control flow constructs? (`control-flow.md`)
 - How do we guess loop invariants? (`invariants.md`)
 - How do we translate lambdas and higher-order functions? (`lambdas.md`, `functions-as-parameters.md`)
-- How do we deal with polymorphism?
+- How do we deal with parametric polymorphism?
+- How do we deal with dynamic dispatch?
+- How do we deal with exceptions?
 
 Contracts currently in Kotlin:
 - `returns`

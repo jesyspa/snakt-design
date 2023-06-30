@@ -181,3 +181,60 @@ to `x.f` and `y.f` whenever we are not using them we allow for the possibility f
 However, note that we then also allow for `x.f` and `y.f` to be modified by any other thread:
 `aliasing_inhale_exhale_problem` shows that we cannot show even quite simple properties in this context.
 
+### Abstract representation for value types
+
+The above two approaches translate all Kotlin classes into Viper references (see `class-hierarchies.md`
+for a more detailed description).  This encoding is not the easiest to work with: we need access
+permissions for all members that we want to read or write, and we cannot permit aliasing.
+
+Instead, we can choose to model classes that behave like values using Viper domains.
+This involves a number of conditions:
+1. All fields of the class must be immutable.
+2. The class must be final.
+3. The class must not extend any other class.
+
+**Note**: There's still work to be done to determine that these conditions are sufficient.
+Some other things that may be worth asking:
+1. May the class implement interfaces?
+2. Are there language features (pointer comparison?) that can cause us problems?
+
+For example, consider the following Kotlin code.
+
+```kotlin
+class A(val x: Int, val y: Int)
+
+fun sum(a: A): Int = a.x + a.y
+```
+
+We can translate this into Viper as follows.
+
+```
+domain A {
+    function A_new(x: Int, y: Int): A
+    function A_get_x(a: A): Int
+    function A_get_y(a: A): Int
+
+    axiom ax_A_get_x {
+        forall x: Int, y: Int :: A_get_x(A_new(x, y)) == x
+    }
+    axiom ax_A_get_y {
+        forall x: Int, y: Int :: A_get_y(A_new(x, y)) == y
+    }
+}
+
+function sum(a: A): Int
+{
+    A_get_x(a) + A_get_y(a)
+}
+```
+
+It may be necessary to add some kind of axiom to be able to conclude that `get_x` and `get_y` together
+determine the instance they are applied to.
+
+Note that objects of such classes can still be cast to something of type `Any`.  It isn't quite clear
+how we should model that.  A similar issue arises when passing such values to polymorphic functions.
+
+This approach is similar to Prusti's snapshot encoding, but we do not build a heap structure that corresponds
+to the snapshot.  We expect this not to be necessary, since such classes are by construction immutable,
+and so we can always treat them as values.  (The classes may contain references, but these are still
+immutable, though they may refer to mutable data structures.)
