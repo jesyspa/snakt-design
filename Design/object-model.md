@@ -238,3 +238,25 @@ This approach is similar to Prusti's snapshot encoding, but we do not build a he
 to the snapshot.  We expect this not to be necessary, since such classes are by construction immutable,
 and so we can always treat them as values.  (The classes may contain references, but these are still
 immutable, though they may refer to mutable data structures.)
+
+## Corner cases
+
+Let's suppose that we take a mixed approach, where some Kotlin types are represented by `Ref` and others
+by a primitive or a domain.
+
+### Representing `Any?`
+
+Any Kotlin value can be cast to the `Any?` type, which we can represent as `Ref` in Viper.
+For types that are already represented by a reference, this is straightforward: however, for primitives
+and types represented by domains, it is not as clear how this translation should be done.
+
+One promising possibility is to wrap the value as a reference with a field containing the wrapped value.  
+
+Kotlin allows runtime type checks, so after a cast to `Any?` the original type is still present at
+runtime to validate casts and resolve type comparisons.  Any wrapper must thus also include a tag with
+the runtime representation of this type; likely the same approaches as in `class-hierarchies.md` should
+be reasonable (note: still TODO).
+
+When casting from `Any?` to a different type, the nullness and tag are checked to ensure the conversion
+is permitted.  If the object represents a wrapped value, that value is extracted.  For a class type
+represented using a reference, the extra permissions are inhaled (possibly via a helper method).
