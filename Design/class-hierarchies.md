@@ -19,14 +19,14 @@ to the fields that the class declares. The example below shows a possible encodi
 
 ```viper
 // Each field is declared as: 
-// field _{ClassName}_{PropertyName}: {PropertyType};
+// field {ClassName}_{PropertyName}: {PropertyType};
 
-field _A_foo: Int;
-field _A_bar: Int;
+field A_foo: Int;
+field A_bar: Int;
 
-predicate t_class_A(this: Ref) 
+predicate A(this: Ref) 
 {
-    acc(this._A_foo) && acc(this._A_bar)
+    acc(this.A_foo) && acc(this.A_bar)
 }
 ```
 
@@ -34,20 +34,20 @@ We can now build the class constructors using Viper's method. For the moment, we
 provided automatically by Kotlin when declaring class fields.
 
 ```viper
-method _A_new(foo: Int, bar: Int) returns (this: Ref)
+method A_new(foo: Int, bar: Int) returns (this: Ref)
     requires true
-    ensures t_class_A(this)
-    ensures unfolding t_class_A(this) in this._A_foo == foo
-    ensures unfolding t_class_A(this) in this._A_bar == bar
+    ensures A(this)
+    ensures unfolding A(this) in this.A_foo == foo
+    ensures unfolding A(this) in this.A_bar == bar
 {
-    this := new(_A_foo, _A_bar)
-    this._A_foo := foo
-    this._A_bar := bar
-    fold t_class_A(this)
+    this := new(A_foo, A_bar)
+    this.A_foo := foo
+    this.A_bar := bar
+    fold A(this)
 }
 ```
 
-The `_A_new` method guarantees that the returned reference satisfies the predicate representing an instance of
+The `A_new` method guarantees that the returned reference satisfies the predicate representing an instance of
 class `A`.
 
 ### Fields/Properties Encoding
@@ -57,28 +57,28 @@ access/modify the fields. The property getters can be modelled as pure functions
 see the notes below the document). The example below re-use the definition of class `A` seen previously.
 
 ```viper
-method _A_set_foo(this: Ref, foo: Int)
-    requires t_class_A(this)
-    ensures t_class_A(this)
-    ensures unfolding t_class_A(this) in this._A_foo == foo
+method A_set_foo(this: Ref, foo: Int)
+    requires A(this)
+    ensures A(this)
+    ensures unfolding A(this) in this.A_foo == foo
 {
-    unfold t_class_A(this)
-    this._A_foo := foo
-    fold t_class_A(this)
+    unfold A(this)
+    this.A_foo := foo
+    fold A(this)
 }
 
-function _A_get_foo(this: Ref): Int
-    requires t_class_A(this)
-    ensures unfolding t_class_A(this) in result == this._A_foo
+function A_get_foo(this: Ref): Int
+    requires A(this)
+    ensures unfolding A(this) in result == this.A_foo
 {
-    unfolding t_class_A(this) in this._A_foo
+    unfolding A(this) in this.A_foo
 }
 
-function _A_get_bar(this: Ref): Int
-    requires t_class_A(this)
-    ensures unfolding t_class_A(this) in result == this._A_bar
+function A_get_bar(this: Ref): Int
+    requires A(this)
+    ensures unfolding A(this) in result == this.A_bar
 {
-    unfolding t_class_A(this) in this._A_bar
+    unfolding A(this) in this.A_bar
 }
 ```
 
@@ -115,17 +115,17 @@ From this point we can have different encoding for class hierarchies. Two main e
 see the file `Examples/Viper/Kotlin/classes/encoding_1.vpr`).
 
     ```viper
-    field _A_foo: Int;
-    field _A_bar: Int;
+    field A_foo: Int;
+    field A_bar: Int;
 
-    field _B_zig: Int; 
+    field B_zig: Int; 
 
-    predicate t_class_A(this: Ref) {
-        acc(this._A_foo) && acc(this._A_bar)
+    predicate A(this: Ref) {
+        acc(this.A_foo) && acc(this.A_bar)
     }
 
-    predicate t_class_B(this: Ref) {
-        acc(this._B_zig) && t_class_A(this)
+    predicate B(this: Ref) {
+        acc(this.B_zig) && A(this)
     }
     ```
 
@@ -136,17 +136,17 @@ file `Examples/Viper/Kotlin/classes/encoding_2.vpr`).
     ```viper
     field __super: Ref;
 
-    field _A_foo: Int;
-    field _A_bar: Int;
+    field A_foo: Int;
+    field A_bar: Int;
 
-    field _B_zig: Int;
+    field B_zig: Int;
 
-    predicate t_class_A(this: Ref) {
-        acc(this._A_foo) && acc(this._A_bar)
+    predicate A(this: Ref) {
+        acc(this.A_foo) && acc(this.A_bar)
     }
 
-    predicate t_class_B(this: Ref) {
-        acc(this.__super) && acc(this._B_zig) && t_class_A(this.__super)
+    predicate B(this: Ref) {
+        acc(this.__super) && acc(this.B_zig) && A(this.__super)
     }
     ```
 
