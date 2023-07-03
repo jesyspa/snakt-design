@@ -1,7 +1,8 @@
 # Classes and Hierarchies
 
 Kotlin as object-oriented programming languages follow the class paradigm. Therefore, the language
-has a system of class hierachies built-in, similar to Java (classes can be extended one, but they can implement several interfaces).
+has a system of class hierarchies built-in, similar to Java (classes can be extended one, 
+but they can implement several interfaces).
 
 Let us consider a possible encoding of classes and their hierarchies in Viper.
 
@@ -11,7 +12,10 @@ Let us consider a possible encoding of classes and their hierarchies in Viper.
 class A(var foo: Int, val bar: Int)
 ```
 
-Starting from the above example, we can create a Viper's field for each class' field, using the _name mangling_ technique. For each class, we also define a new Viper's predicate for representing a class. Therefore, a reference type is a reference to a given class `C` if and only if the associated predicate is true. The predicate is built by giving access to the fields that the class declares. The example below shows a possible encoding.
+Starting from the above example, we can create a Viper's field for each class' field, using the _name mangling_ technique.
+For each class, we also define a new Viper's predicate for representing a class. Therefore, a reference type is a 
+reference to a given class `C` if and only if the associated predicate is true. The predicate is built by giving access 
+to the fields that the class declares. The example below shows a possible encoding.
 
 ```viper
 // Each field is declared as: 
@@ -26,7 +30,8 @@ predicate t_class_A(this: Ref)
 }
 ```
 
-We can now build the class constructors using Viper's method. For the moment, we focus on the default constructor provided automatically by Kotlin when declaring class fields.
+We can now build the class constructors using Viper's method. For the moment, we focus on the default constructor 
+provided automatically by Kotlin when declaring class fields.
 
 ```viper
 method _A_new(foo: Int, bar: Int) returns (this: Ref)
@@ -42,12 +47,14 @@ method _A_new(foo: Int, bar: Int) returns (this: Ref)
 }
 ```
 
-The `_A_new` method guarantes that the returned reference satisfies the predicate representing an instance of
+The `_A_new` method guarantees that the returned reference satisfies the predicate representing an instance of
 class `A`.
 
 ### Fields/Properties Encoding
 
-Kotlin desugars the keywords `val` and `var` into getters and setters. Therefore, is reasonable to model them to access/modify the fields. The property getters can be modelled as pure functions (when the getter is not [overriden][0], see the notes below the document). The example below re-use the definition of class `A` seen previously.
+Kotlin desugars the keywords `val` and `var` into getters and setters. Therefore, is reasonable to model them to 
+access/modify the fields. The property getters can be modelled as pure functions (when the getter is not [overridden][0], 
+see the notes below the document). The example below re-use the definition of class `A` seen previously.
 
 ```viper
 method _A_set_foo(this: Ref, foo: Int)
@@ -79,7 +86,9 @@ function _A_get_bar(this: Ref): Int
 
 ## Hierarchy
 
-Class hierarchy is an important aspect to model for Kotlin classes. For the moment, I am omitting the fact each class inherits from the `Any` class implicitely. By default, Kotlin classes are closed to extension, but they can be made open using the `open` keyword.
+Class hierarchy is an important aspect to model for Kotlin classes. For the moment, I am omitting the fact each class 
+inherits from the `Any` class implicitly. By default, Kotlin classes are closed to extension, but they can be made open 
+using the `open` keyword.
 
 ```kotlin
 open class A(val foo: Int, val bar: Int)
@@ -87,7 +96,7 @@ open class A(val foo: Int, val bar: Int)
 class B(val zig: Int, foo: Int, bar: Int): A(foo, bar)
 ```
 
-The above Kotlin code is desgugared into:
+The above Kotlin code is desugared into:
 
 ```kotlin
 open class A(val foo: Int, val bar: Int)
@@ -102,7 +111,8 @@ class B: A {
 
 From this point we can have different encoding for class hierarchies. Two main encoding are proposed:
 
-1. Encode the sub-class predicate as an extension to the parent one, adding it in conjuction (referred as Encoding 1, see the file `Examples/Viper/Kotlin/classes/encoding_1.vpr`).
+1. Encode the sub-class predicate as an extension to the parent one, adding it in conjunction (referred as Encoding 1,
+see the file `Examples/Viper/Kotlin/classes/encoding_1.vpr`).
 
     ```viper
     field _A_foo: Int;
@@ -119,7 +129,9 @@ From this point we can have different encoding for class hierarchies. Two main e
     }
     ```
 
-2. Define a special field `__super` in Viper, and encode the sub-class predicate using the previous rules, but with `__super` field satisfying the parent class predicate (referred as Encoding 2, see the file `Examples/Viper/Kotlin/classes/encoding_2.vpr`).
+2. Define a special field `__super` in Viper, and encode the sub-class predicate using the previous rules, but 
+with `__super` field satisfying the parent class predicate (referred as Encoding 2, see the 
+file `Examples/Viper/Kotlin/classes/encoding_2.vpr`).
 
     ```viper
     field __super: Ref;
@@ -160,4 +172,4 @@ class Foo {
 }
 ```
 
-In this case, we can't generate a getter as a Viper function, since we modify a field belogging to the class.
+In this case, we can't generate a getter as a Viper function, since we modify a field belonging to the class.
