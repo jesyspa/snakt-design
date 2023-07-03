@@ -2,7 +2,7 @@
  * 
  * class A(f: Int)
  * 
- * fun function_object_impure(fo: A -> Unit): Int {
+ * fun function_object_impure(fo: (A) -> Unit): Int {
  *   val a = new A(0)
  *   fo(a)
  *   return a.f
