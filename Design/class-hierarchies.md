@@ -52,8 +52,9 @@ class `A`.
 
 ### Fields/Properties Encoding
 
-Kotlin desugars the keywords `val` and `var` into getters and setters. Therefore, is reasonable to model them to 
-access/modify the fields. The property getters can be modelled as pure functions (when the getter is not [overridden][0], 
+Kotlin desugars the class fields declared with `val` and `var` (inside the constructor) into getters and setters. 
+Therefore, is reasonable to model getters/setters to access/modify the fields. 
+The property getters can be modelled as pure functions (when the getter is not [overridden][0], 
 see the notes below the document). The example below re-use the definition of class `A` seen previously.
 
 ```viper
@@ -131,7 +132,8 @@ see the file `Examples/Viper/Kotlin/classes/encoding_1.vpr`).
 
 2. Define a special field `__super` in Viper, and encode the sub-class predicate using the previous rules, but 
 with `__super` field satisfying the parent class predicate (referred as Encoding 2, see the 
-file `Examples/Viper/Kotlin/classes/encoding_2.vpr`).
+file `Examples/Viper/Kotlin/classes/encoding_2.vpr`). Currently, this approach does not offer a way
+to perform downcasting.
 
     ```viper
     field __super: Ref;
