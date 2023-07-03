@@ -54,8 +54,8 @@ predicate B(this: Ref)
 method A_new(foo: Int, bar: Int) returns (this: Ref)
     requires true
     ensures A(this)
-    ensures unfolding A(this) in this.A_foo == foo
-    ensures unfolding A(this) in this.A_bar == bar
+    ensures A_get_foo(this) == foo
+    ensures A_get_bar(this) == bar
 {
     this := new(A_foo, A_bar)
     this.A_foo := foo
@@ -85,9 +85,9 @@ function A_sum(this: Ref): Int
 method B_new(zig: Int, foo: Int, bar: Int) returns (this: Ref)
     requires true
     ensures B(this)
-    ensures unfolding B(this) in this.B_zig == zig
-    ensures unfolding B(this) in (unfolding A(this) in this.A_foo == foo)
-    ensures unfolding B(this) in (unfolding A(this) in this.A_bar == bar)
+    ensures B_get_zig(this) == zig
+    ensures B_get_foo(this) == foo
+    ensures B_get_bar(this) == bar
 {
     this := new(A_foo, A_bar, B_zig)
     this.B_zig := zig
@@ -130,7 +130,6 @@ method driver0()
 
     assert foo == 10
     assert bar == 20
-
     assert sum == 30
 }
 
