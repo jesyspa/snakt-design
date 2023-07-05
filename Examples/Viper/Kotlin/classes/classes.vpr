@@ -1,0 +1,47 @@
+domain KClass {
+
+    function GetType(r: Ref): KClass
+
+    /* Class Type Constructors */
+    unique function KClass_Any(): KClass
+
+    /* Subtyping relationship functions */
+
+    function IsSubType(sub: KClass, super: KClass): Bool
+    function Extends(sub: KClass, super: KClass): Bool
+    function IsNotSubType(sub: KClass, super: KClass): Bool
+    
+    axiom ax_ExtendsImpliesSubtype
+    {
+        forall sub: KClass, super: KClass :: { Extends(sub, super), IsSubType(sub, super) } 
+            Extends(sub, super) ==> IsSubType(sub, super)    
+    }
+
+    // Types relationships are defined as partial order, therefore
+    // they must satisfy the: reflexivity, transitivity and antisymmetry properties
+
+    axiom ax_Reflexivity
+    {
+        forall k: KClass :: {IsSubType(k, k)} IsSubType(k, k)
+    }
+
+    axiom ax_Transitivity 
+    {
+        forall bottom: KClass, top: KClass, mid: KClass :: 
+        { IsSubType(bottom, mid), IsSubType(mid, top), IsSubType(bottom, top) }
+            IsSubType(bottom, mid) && IsSubType(mid, top) ==> IsSubType(bottom, top)
+    }
+
+    axiom ax_AntiSymmetric
+    {
+        forall sub: KClass, super: KClass :: {IsSubType(sub, super), IsSubType(super, sub)}
+            sub != super && IsSubType(sub, super) ==> !IsSubType(super, sub)
+    }
+
+}
+
+function as(obj: Ref, klass: KClass): Ref
+    requires IsSubType(GetType(obj), klass)
+{
+    obj
+}
