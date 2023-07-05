@@ -1,0 +1,179 @@
+/***
+
+This document shows a possible implementation of encoding classes
+information for performing casting.
+
+```kotlin
+class A(val foo: Int)[: Any()]
+
+class B(val zig: Int, foo: Int): A(foo)
+
+fun testCasting() {
+    val b: B = B(10, 20)
+    val a: A = b as A
+    assert a.foo == 20
+    val ba: B = a as B
+    assert ba.zig == 10
+    assert ba.foo == 20
+}
+
+fun doMagic(a: A) {
+    if (a is B) {
+        println("a is an instance of B")
+    }
+    else {
+        println("a is not an instance of B")
+    }
+}
+```
+
+*/
+
+import "./classes.vpr"
+
+/* 
+    This domain extends the current KClass domain, defined in `classes.vpr`, 
+    with the information of the current `compilation unit` (referred to the Kotlin
+    file declaring the classes `A` and `B`).
+*/
+domain KClass_1 {
+
+    unique function KClass_A(): KClass
+    unique function KClass_B(): KClass
+
+    axiom ax_Extends
+    {
+        Extends(KClass_A(), KClass_Any()) && 
+        Extends(KClass_B(), KClass_A())
+    }
+
+}
+
+field A_foo: Int;
+field B_zig: Int;
+
+method A_get_foo(this: Ref) returns (res: Int)
+    requires acc(this.A_foo)
+    requires IsSubType(GetType(this), KClass_A())
+    ensures acc(this.A_foo) && this.A_foo == old(this.A_foo)
+    ensures res == this.A_foo
+{
+    res := this.A_foo
+}
+
+method A_new(foo: Int) returns (this: Ref)
+    ensures acc(this.A_foo)
+    ensures this.A_foo == foo
+    ensures GetType(this) == KClass_A()
+{
+    this := new(A_foo)
+    this.A_foo := foo
+    inhale GetType(this) == KClass_A()
+}
+
+method B_get_zig(this: Ref) returns (res: Int)
+    requires acc(this.B_zig)
+    requires IsSubType(GetType(this), KClass_B())
+    ensures acc(this.B_zig) && this.B_zig == old(this.B_zig)
+    ensures res == this.B_zig
+{
+    res := this.B_zig
+}
+
+method B_get_foo(this: Ref) returns (res: Int)
+    requires acc(this.A_foo)
+    requires IsSubType(GetType(this), KClass_B())
+    ensures acc(this.A_foo) && this.A_foo == old(this.A_foo)
+    ensures res == this.A_foo
+{
+    res := this.A_foo
+}
+
+method B_new(zig: Int, foo: Int) returns (this: Ref)
+    ensures acc(this.A_foo) && acc(this.B_zig)
+    ensures GetType(this) == KClass_B()
+    ensures this.B_zig == zig
+    ensures this.A_foo == foo
+{
+    this := new(A_foo, B_zig)
+    inhale GetType(this) == KClass_B()
+    this.B_zig := zig
+    this.A_foo := foo
+}
+
+method doMagicDriver()
+{
+    var foo: Int
+    var zig: Int
+    
+    var a: Ref 
+    a := A_new(/* foo */ 42)
+
+    foo := A_get_foo(a)
+
+    assert foo == 42
+
+    var b: Ref
+    b := B_new(/* zig */ 10, /* foo */ 20)
+
+    zig := B_get_zig(b) 
+    assert zig == 10
+
+    foo := B_get_foo(b)
+    assert foo == 20
+
+    assert IsSubType(GetType(b), GetType(a))
+    
+    doMagic(b)
+
+    assert true
+}
+
+method TestCasting()
+{
+    // val b: B = B(10, 20)
+    // val a: A = b as A
+    // assert a.foo == 20
+    // val ba: B = a as B
+
+    var foo: Int
+    var zig: Int
+
+    var b: Ref
+    b := B_new(/* zig */ 10, /* foo */ 20)
+
+    zig := B_get_zig(b) 
+    assert zig == 10
+
+    foo := B_get_foo(b)
+    assert foo == 20
+
+    // What about {down/upper}casting?
+    
+    var a: Ref
+    a := as(b, KClass_A())
+
+    foo := A_get_foo(a)
+    assert foo == 20
+
+    var ba: Ref
+    ba := as(a, KClass_B())
+
+    zig := B_get_zig(ba) 
+    assert zig == 10
+
+    foo := B_get_foo(ba)
+    assert foo == 20
+
+}
+
+method doMagic(a: Ref)
+    requires IsSubType(GetType(a), KClass_A())
+{
+    if (GetType(a) == KClass_B()) {
+        // println("a is an instance of B")
+    }
+    else {
+        // println("a is not an instance of B")
+    }
+}
