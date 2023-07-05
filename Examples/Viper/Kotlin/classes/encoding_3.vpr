@@ -41,6 +41,9 @@ domain KClass_1 {
     unique function KClass_A(): KClass
     unique function KClass_B(): KClass
 
+    /**
+        Define class hierarchy between `A` and `B` using the domain KClass functions.
+     */
     axiom ax_Extends
     {
         Extends(KClass_A(), KClass_Any()) && 

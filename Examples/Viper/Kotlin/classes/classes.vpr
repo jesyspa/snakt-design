@@ -1,5 +1,6 @@
 domain KClass {
 
+    /* Given a reference, obtain its type information. */
     function GetType(r: Ref): KClass
 
     /* Class Type Constructors */
@@ -9,7 +10,6 @@ domain KClass {
 
     function IsSubType(sub: KClass, super: KClass): Bool
     function Extends(sub: KClass, super: KClass): Bool
-    function IsNotSubType(sub: KClass, super: KClass): Bool
     
     axiom ax_ExtendsImpliesSubtype
     {
@@ -18,7 +18,7 @@ domain KClass {
     }
 
     // Types relationships are defined as partial order, therefore
-    // they must satisfy the: reflexivity, transitivity and antisymmetry properties
+    // they must satisfy the: reflexivity, transitivity and antisymmetry properties.
 
     axiom ax_Reflexivity
     {
