@@ -173,7 +173,7 @@ method TestCasting()
 method doMagic(a: Ref)
     requires IsSubType(GetType(a), KClass_A())
 {
-    if (GetType(a) == KClass_B()) {
+    if (IsSubType(GetType(a), KClass_B())) {
         // println("a is an instance of B")
     }
     else {
