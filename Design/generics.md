@@ -48,10 +48,10 @@ The above representation can be used across the board, but it is less powerful t
 like when it comes to value types.  Consider the following example:
 
 ```kotlin
-class<T> A(val x: T)
+class A<T>(val x: T, val y: T)
 ```
 
-We would like `A<A<int>>` to be a value type: there is no reason to perform any heap allocation.
+We would like `A<A<Int>>` to be a value type: there is no reason to perform any heap allocation.
 However, this involves a special, monomorphic version of `A` to be generated when it is instantiated
 with a value type, including all associated functions.  Viper has some limited support for this,
 as domains can have parameters, but it is not clear in how far it addresses this problem.
