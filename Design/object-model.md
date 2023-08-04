@@ -45,29 +45,62 @@ These use a variety of different approaches for representing objects.
 
 ### Gobra (Go → Viper)
 
-- Gobra models structs as references and primitive as both as primitives and references. The reason primitives cannot always be modeled as primitives is because Go lets you create references to any values. In this case the primitive value is placed on the heap and modeled in Viper with a reference and single field containing the value. Unfortunately, Gobra doesn't decide this automatically. An `@` annotation has to be placed on shared variables that should be placed on the heap.
-- Since access permissions have to be specified explicitly anyway, the type system is in some
-  sense ignored by the verifier: you can't have type-incorrect programs because they will be
-  rejected, but the types do not give much extra information about what you _can_ do.
+- Gobra models structs as references and primitive as both as primitives and
+  references. The reason primitives cannot always be modeled as primitives is
+  because Go lets you create references to any values. In this case the
+  primitive value is placed on the heap and modeled in Viper with a reference
+  and single field containing the value. Unfortunately, Gobra doesn't decide
+  this automatically. An `@` annotation has to be placed on shared variables
+  that should be placed on the heap.
+- Since access permissions have to be specified explicitly anyway, the type
+  system is in some sense ignored by the verifier: you can't have type-incorrect
+  programs because they will be rejected, but the types do not give much extra
+  information about what you _can_ do.
 - To the best of my knowledge Gobra does not support lambdas.
 
 
 - (How) does it deal with constantness?
-  - Constantness does not need to be handled explicitly as users provide permission annotations themselves.
+  - Constantness does not need to be handled explicitly as users provide
+    permission annotations themselves.
   
 - (How) does it deal with inheritance?
-  - Go does not support classes, only structs. As such, there is also no concept of inheritance.
-  - However, Go does support interfaces. Gobra models interfaces abstract predicate families (APFs, see section 4.1.4 of [this doctoral thesis][3] for more detail). In addition, an implementation proof is required that the methods of a subtype of the interface adhere to the specification of the interface. In simple cases Gobra can automatically infer these implementation proofs, in other cases the user has to provide them.
-  - This is important for us as well, not just for interfaces but also for subtyping. As an illustration let A and B be two classes where A is a subtype of B. B now contains a method f with an accompanying specification. If A overrides this method we have to prove that the specification of the method in A entails the specification in B. In detail this means that the preconditions of A.f imply the precondition of B.f and that the postcondition of B.f imply the postcondition of A.f. This is to make sure that a parameter of type B can always be soundly be replaced by a value of type A.
-  - It is not clear to me if we can simplify things a bit as Kotlin has nominal subtyping in comparison to Go's structural subtyping.
+  - Go does not support classes, only structs. As such, there is also no concept
+    of inheritance.
+  - However, Go does support interfaces. Gobra models interfaces abstract
+    predicate families (APFs, see section 4.1.4 of [this doctoral thesis][3] for
+    more detail). In addition, an implementation proof is required that the
+    methods of a subtype of the interface adhere to the specification of the
+    interface. In simple cases Gobra can automatically infer these
+    implementation proofs, in other cases the user has to provide them.
+  - This is important for us as well, not just for interfaces but also for
+    subtyping. As an illustration let A and B be two classes where A is a
+    subtype of B. B now contains a method f with an accompanying specification.
+    If A overrides this method we have to prove that the specification of the
+    method in A entails the specification in B. In detail this means that the
+    preconditions of A.f imply the precondition of B.f and that the
+    postcondition of B.f imply the postcondition of A.f. This is to make sure
+    that a parameter of type B can always be soundly be replaced by a value of
+    type A.
+  - It is not clear to me if we can simplify things a bit as Kotlin has nominal
+    subtyping in comparison to Go's structural subtyping.
 
 - (How) does it deal with purity?
-  - Pure functions can either be defined just as comments (ignored by the compiler and solely for the purpose of verification) or a pure annotation can be attached to the actual Go function. In the latter case only a subset of pure Go expressions is allowed.
-  - These pure functions are encoded as Viper functions. The reason for annotating a function as pure is that it can be used for the purpose of specification.
+  - Pure functions can either be defined just as comments (ignored by the
+    compiler and solely for the purpose of verification) or a pure annotation
+    can be attached to the actual Go function. In the latter case only a subset
+    of pure Go expressions is allowed.
+  - These pure functions are encoded as Viper functions. The reason for
+    annotating a function as pure is that it can be used for the purpose of
+    specification.
 
-- Gobra provides first-class predicates.  How do they work?  What are they for?  Do we need them?
-  - Predicates are similar to pure function with the difference that they can define (potentially recursive) assertions. This is very useful when making assertions on (recursive) data structure.
-  - To give users the power to make these powerful predicate definition themselves for use in their specification Gobra exposes them to the user (as do all other Viper frontends)
+- Gobra provides first-class predicates.  How do they work?  What are they for?
+  Do we need them?
+  - Predicates are similar to pure function with the difference that they can
+    define (potentially recursive) assertions. This is very useful when making
+    assertions on (recursive) data structure.
+  - To give users the power to make these powerful predicate definition
+    themselves for use in their specification Gobra exposes them to the user (as
+    do all other Viper frontends)
 
 [3]: https://essay.utwente.nl/81338/1/Rubbens_MA_EEMCS.pdf
 
@@ -96,7 +129,13 @@ about the heap, and so it is not possible to return objects encoded this way fro
 encoded as a fractionally-owned predicate, but what does Prusti do to inform the SMT solver
 that calling `foo(p: &i32)` as `foo(&x)` does not change the value of `x`?
 
-**Answer:** This is built into the permission logic of Viper. As long as the caller keeps a non-zero fraction of the predicate, it can be automatically inferred that the callee (and also no other running thread for that matter) can possibly have write permission to the reference. Thus the value can be _framed_ around the method call, i.e. the value has not been changed. See the last exercise of the [Fractional Permission Section][1] of the Viper tutorial for an illustration of how this works.
+**Answer:** This is built into the permission logic of Viper. As long as the
+caller keeps a non-zero fraction of the predicate, it can be automatically
+inferred that the callee (and also no other running thread for that matter) can
+possibly have write permission to the reference. Thus the value can be _framed_
+around the method call, i.e. the value has not been changed. See the last
+exercise of the [Fractional Permission Section][1] of the Viper tutorial for an
+illustration of how this works.
 
 [0]: https://viperproject.github.io/prusti-dev/dev-guide/encoding/types-heap.html
 [1]: http://viper.ethz.ch/tutorial/#non-aliasing
