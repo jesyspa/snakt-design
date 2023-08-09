@@ -1,49 +1,44 @@
 # Contracts
-Given a method
-- contracts are represented in the FIR as a function call with a single lambda expression as argument s.t. 
-  - `calleeReference.name == 'contract'`
-  - `calleeReference.resolvedSymbol.callableId.packageName == 'kotlin.contracts'`
-  - `calleeReference.resolvedSymbol.callableId.callableName == 'contract'`
-- the contract must be the first statement of the method block
-- it is not possible to have more than one contract for a method, but the lambda passed to the contract can have multiple lines and each line is an effect 
+Information about how contracts work can be found here:
+https://github.com/Kotlin/KEEP/blob/master/proposals/kotlin-contracts.md
 
-So given the body of a method, it contains a contract iff the first statement of that block is a contract
 
-`MethodConversionContext` can be edited in the following way:
-- adding a parameter for an easier access to the effects
-- the method `convertBody` already ignores contracts
-- creating a method that returns a list of expressions (maybe empty) corresponding to the effects of the contract, this list will be passed to `toMethod` as the list of post conditions
-- translating the effects:
-  - `returns()` Since we are not interested in proving termination, this effects does not give us any information
-  - `returnsNotNull()` can be translated in a viper NeCmp exp
-  - `returns(smth)` can be translated in a viper EqCmp exp
-  - `returns(smth) implies (BoolExp)` can be translated in a viper implies expr
+## Encoding simple effects
+Actually there are only 5 different simple effects which can be easily encoded
+- `returns()` &rarr; Since we are not interested in proving termination, this effects does not give us any information
+  and can be ignored
+- `returnsNotNull()` &rarr; `ensures ret != null`
+- `returns(true)` &rarr; `ensures ret == true`
+- `returns(false)` &rarr; `ensures ret == false`
+- `returns(null)` &rarr; `ensures ret == null`
 
-In order to understand how the effects are represented in the FIR, let take this example into consideration
+## Encoding conditional effects
+Conditional effects can be obtained by attaching a boolean expression to another SimpleEffect effect
+with the function implies.
+The syntax is the following: `simpleEffect implies booleanExpression`
+and can be encoded as `ensures simpleEffect ==> booleanExpression`
 
-```Kotlin
-@OptIn(ExperimentalContracts::class)
-fun contract(b: Boolean): Boolean {
-  contract {
-    returns()
-    returnsNotNull()
-    retruns(true)
-    returns(false) implies (b)
-  }
-  if (b) {
-    return false
-  } else {
-    return true
-  }
-}
-```
+example: `returns(false) implies (b)` &rarr; `ensures ret == false ==> b`
 
-## effects in the FIR
-in an object of type FirSimpleFunction which contains a contract
-- `declaration.body.statements[0].call.argumentList.arguments[0].expression.anonymousFunction.body.statements` contains the list of effects
-- an easier way to access the effects list is `declaration.contractDescription.effects`, but in order to access it, probably we'll need to add another parameter to `MethodConversionContext`
-  - `returns()` has `value.name = "WILDCARD"`
-  - `returnsNotNull()` has `value.name = "NOT_NULL"`
-  - `returns(true)` has `value.name = "TRUE"`
-  - `returns(false) implies (BoolExp)` has `effect.value.name = "FALSE"` and `effect.condition.name = b`
-- we can distinguish between simpleEffect, conditionalEffect and CallsInPlace with pattern matching on the type
+
+## Encoding calls in place
+TODO
+
+## FirContractDescription structure
+- A `FirSimpleFunction` contains the infos about the contracts in the field `contractDescription`
+- `contractDescription.effects` is a list of `FirEffectDeclaration` which represent the effects of the contract
+- an object of type `FirEffectDeclaration` has a field called `effect` of type `KtEffectDeclaration`,
+  in order to distinguish between different types of effects we have to do pattern matching on this field:
+  - is `KtReturnsEffectDeclaration` &rarr; the effect is a `SimpleEffect` and we can understand which kind of
+    `SimpleEffect` from the field `value.name`, in particular
+    - `returns()` has `value.name = "WILDCARD"`
+    - `returnsNotNull()` has `value.name = "NOT_NULL"`
+    - `returns(true)` has `value.name = "TRUE"`
+    - `returns(false)` has `value.name = "FALSE"`
+    - `returns(null)` has `value.name = "NULL"`
+  - is `KtConditionalEffectDeclaration` &rarr; the effect is a `ConditionalEffects`
+    - `effect.effect.value.name` contains the value of the `SimpleEffect` which is the left part of the implication
+    - `effect.condition` contains the boolean expression which is the right part of the implication
+      (even though `implies` takes a `Boolean` argument, actually only a subset of valid Kotlin expressions is accepted:
+      namely, null-checks (`== null`, `!= null`), instance-checks (`is`, `!is`), logic operators (`&&`, `||`, `!`)
+  - is `KtCallsEffectDeclaration` &rarr; the effect is `CallsInPlace`
