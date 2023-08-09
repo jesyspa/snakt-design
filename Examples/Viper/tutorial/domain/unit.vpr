@@ -1,0 +1,11 @@
+domain Unit {
+    unique function Element(): Unit
+    axiom Unicity {
+        forall x : Unit, y : Unit :: x == y
+    }
+}
+
+method test(a: Unit, b: Unit) returns (ret: Unit)
+{
+    assert a == b
+}
