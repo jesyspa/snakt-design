@@ -31,19 +31,20 @@ TODO
 
 ## FirContractDescription structure
 - A `FirSimpleFunction` contains the infos about the contracts in the field `contractDescription`
+of type `FirResolvedContractDescription`
 - `contractDescription.effects` is a list of `FirEffectDeclaration` which represent the effects of the contract
-- An object of type `FirEffectDeclaration` has a field called `effect` of type `KtEffectDeclaration`,
+- An object of type `FirEffectDeclaration` has a field called `effect` of type `ConeEffectDeclaration`,
   in order to distinguish between different types of effects we have to do pattern matching on that field:
-  - is `KtReturnsEffectDeclaration` &rarr; the effect is a `SimpleEffect` and we can understand which kind of
-    `SimpleEffect` from the field `value.name`, in particular
-    - `returns()` has `value.name = "WILDCARD"`
-    - `returnsNotNull()` has `value.name = "NOT_NULL"`
-    - `returns(true)` has `value.name = "TRUE"`
-    - `returns(false)` has `value.name = "FALSE"`
-    - `returns(null)` has `value.name = "NULL"`
-  - is `KtConditionalEffectDeclaration` &rarr; the effect is a `ConditionalEffects`
+  - is `ConeReturnsEffectDeclaration` &rarr; the effect is a `SimpleEffect` and we can understand which kind of
+    `SimpleEffect` from the field `value`, in particular
+    - `returns()` has `value = "ConeContractConstantValues.WILDCARD"`
+    - `returnsNotNull()` has `value = "ConeContractConstantValues.NOT_NULL"`
+    - `returns(true)` has `value = "ConeContractConstantValues.TRUE"`
+    - `returns(false)` has `value = "ConeContractConstantValues.FALSE"`
+    - `returns(null)` has `value = "ConeContractConstantValues.NULL"`
+  - is `ConeConditionalEffectDeclaration` &rarr; the effect is a `ConditionalEffects`
     - `effect.effect.value.name` contains the value of the `SimpleEffect` which is the left part of the implication
     - `effect.condition` contains the boolean expression which is the right part of the implication
       (even though `implies` takes a `Boolean` argument, actually only a subset of valid Kotlin expressions is accepted:
       namely, null-checks (`== null`, `!= null`), instance-checks (`is`, `!is`), logic operators (`&&`, `||`, `!`)
-  - is `KtCallsEffectDeclaration` &rarr; the effect is `CallsInPlace`
+  - is `ConeCallsEffectDeclaration` &rarr; the effect is `CallsInPlace`
