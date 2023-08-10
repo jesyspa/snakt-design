@@ -1,0 +1,112 @@
+/**
+ * Approach 1
+ */
+
+field val: Int
+field string: Ref
+
+method null_check2(x: Ref) returns (ret: Bool) 
+    requires x != null ==> acc(x.string)
+    requires x != null ==> acc(x.string)
+    ensures ret <==> x != null
+{
+    if (x == null) {
+        ret := false
+    } else {
+        ret := true
+    }
+}
+
+method return_nullable2(b: Bool) returns (ret: Ref)
+    ensures ret != null ==> acc(ret.val)
+    ensures ret == null <==> b
+{
+    ret := new(val)
+    if (b) {
+        ret := null
+    } else {
+        ret.val := 3
+    }
+}
+
+method smart_cast2(x: Ref) returns (ret: Int)
+    // Access needs to be given to nullable values even if they are non-heap based
+    // In that case it might be wise to only grant read permissions to guarantee that
+    // the value does not get updated.
+    requires x != null ==> acc(x.val, wildcard)
+    ensures x != null ==> acc(x.val, wildcard)
+    ensures x == null ==> ret == 0
+    ensures x != null ==> ret == x.val
+{
+    if (x == null) {
+        ret := 0
+    } else {
+        ret := x.val
+    }
+}
+
+
+
+/**
+ * Approach 2
+ */
+
+domain Nullable[T] {
+    function null_val(): Nullable[T]
+    function nullable_of(val: T): Nullable[T]
+    function val_of_nullable(x: Nullable[T]): T
+
+    axiom some_not_null {
+        forall x: T :: { nullable_of(x) }
+            nullable_of(x) != null_val()
+    }
+    axiom val_of_nullable_of_val {
+        forall x: T :: { val_of_nullable(nullable_of(x)) }
+            val_of_nullable(nullable_of(x)) == x
+    }
+    axiom nullable_of_val_of_nullable {
+        forall x: Nullable[T] :: { nullable_of(val_of_nullable(x)) }
+            x != null_val() ==> nullable_of(val_of_nullable(x)) == x
+    }
+}
+
+method null_check(x: Nullable[Ref]) returns (ret: Bool)
+    ensures ret <==> x != null_val()
+{
+    if (x == null_val()) {
+        ret := false
+    } else {
+        ret := true
+    }
+}
+
+method some_method(x: Nullable[Int]) {}
+
+method pass_nullable_parameter(x: Nullable[Int])
+    ensures x == old(x)
+{
+    some_method(x)
+}
+
+method return_nullable(b: Bool) returns (ret: Nullable[Int]) 
+    ensures b <==> ret == null_val()
+{
+    if (b) {
+        ret := null_val()
+    } else {
+        ret := nullable_of(0)   // Cast needs to be inserted, could be solved if dynamic subtyping is solved
+    }
+}
+
+method smart_cast(x: Nullable[Int]) returns (ret: Int)
+    ensures x == null_val() ==> ret == 0
+    ensures x != null_val() ==> ret == val_of_nullable(x)
+{
+    if (x == null_val()) {
+        ret := 0
+    } else {
+        // Here we need to be able to extract the smart cast that the compiler does and
+        // convert the type into a non-nullable one.
+        ret := val_of_nullable(x)
+    }
+}
