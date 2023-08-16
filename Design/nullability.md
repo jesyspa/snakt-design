@@ -119,6 +119,11 @@ method pass_nullable_parameter(x: Nullable[Int])
 For more examples see the the `nullability.kt` and `nullability.vpr` files the
 the `Examples` directory.
 
+TODO: Look at cases where nullability can come from different sources like:
+```kotlin
+typealias T = Int?
+typealias S = T?
+```
 
 ## Automatic conversion
 
@@ -153,3 +158,5 @@ fun smart_cast(x: Int?): Int {
 
 Here we need to extract this smart cast information from the compiler and also
 insert a explicit cast with `val_of_nullable`.
+
+TODO: Look at other cases like `?.`, `?:`, `!!`, etc.

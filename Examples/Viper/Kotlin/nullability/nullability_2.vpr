@@ -1,54 +1,6 @@
 /**
- * Approach 1
- */
-
-field val: Int
-field string: Ref
-
-method null_check2(x: Ref) returns (ret: Bool) 
-    requires x != null ==> acc(x.string)
-    requires x != null ==> acc(x.string)
-    ensures ret <==> x != null
-{
-    if (x == null) {
-        ret := false
-    } else {
-        ret := true
-    }
-}
-
-method return_nullable2(b: Bool) returns (ret: Ref)
-    ensures ret != null ==> acc(ret.val)
-    ensures ret == null <==> b
-{
-    ret := new(val)
-    if (b) {
-        ret := null
-    } else {
-        ret.val := 3
-    }
-}
-
-method smart_cast2(x: Ref) returns (ret: Int)
-    // Access needs to be given to nullable values even if they are non-heap based
-    // In that case it might be wise to only grant read permissions to guarantee that
-    // the value does not get updated.
-    requires x != null ==> acc(x.val, wildcard)
-    ensures x != null ==> acc(x.val, wildcard)
-    ensures x == null ==> ret == 0
-    ensures x != null ==> ret == x.val
-{
-    if (x == null) {
-        ret := 0
-    } else {
-        ret := x.val
-    }
-}
-
-
-
-/**
  * Approach 2
+ * Read the nullability doc in the design directory for more insigth.
  */
 
 domain Nullable[T] {
