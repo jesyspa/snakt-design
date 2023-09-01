@@ -1,0 +1,5 @@
+import "Type.vpr"
+
+domain TypeOf[T]  {
+  function typeOf(x: T): Type
+}

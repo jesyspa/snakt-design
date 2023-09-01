@@ -1,0 +1,16 @@
+import "Nullable.vpr"
+
+domain Casting[A, B]  {
+
+  function cast(a: A, newType: Type): B
+
+  axiom null_cast {
+    (forall newType: Type :: { (cast((null_val(): Nullable[A]), NullableType(newType)): Nullable[B]) }
+      (cast((null_val(): Nullable[A]), NullableType(newType)): Nullable[B]) == (null_val(): Nullable[B]))
+  }
+
+  axiom type_of_cast {
+    (forall a: A, newType: Type :: { (typeOf((cast(a, newType): B)): Type) }
+      isSubtype((typeOf((cast(a, newType): B)): Type), newType))
+  }
+}
