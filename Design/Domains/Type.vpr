@@ -75,6 +75,11 @@ domain Type  {
   }
 
   axiom {
+    (forall t: Type :: { NullableType(t) }
+      isSubtype(t, NullableType(t)))
+  }
+
+  axiom {
     (forall t: Type, t2: Type :: { isSubtype(NullableType(t), NullableType(t2)) }
       isSubtype(t, t2) ==> isSubtype(NullableType(t), NullableType(t2)))
   }
