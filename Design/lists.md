@@ -1,22 +1,22 @@
 # Lists
-It can be possible to verify some properties regarding lists by adding some pre- / post-conditions to stdlib functions
+It can be possible to verify some properties regarding lists by adding some pre/postconditions to stdlib functions
 or allowing the user to express them with new kinds of contracts.
 
-## Pre-conditions and Post-conditions
+## Preconditions and Postconditions
 Since one of our goals is to add contracts based on the non-emptiness of a list,
-it can be useful to add some pre- / post-conditions to the most used list operations.
+it can be useful to add some pre/postconditions to the most used list operations.
 
-| Interesting operations                                                         | pre-conditions | post-conditions                                                          |
-|--------------------------------------------------------------------------------|----------------|--------------------------------------------------------------------------|
-| `add`                                                                          |                | `\|res\| == \|l\| + 1`                                                   |
-| `isEmpty` (opposite for `isNotEmpty`)                                          |                | `(res == true => \|l\| == 0) && (res == false => \|l\| > 0)`             |
-| `distinct`, `distinctBy`, `drop`, `dropLast`, `take`, `takeLast`, `filter` ... |                | `\|res\| <= \|l\|`                                                       |
-| `first`, `last`, `max`, ...                                                    | `\|l\| > 0`    |                                                                          |
-| `firstOrNull`, `lastOrNull`                                                    |                | `res != null => \|l\| > 0`                                               |
-| `forEach`                                                                      |                | something about number of calls in place related to the size of the list |
-| `map`, `mapIndexed`, `reversed`, `sortedBy`, ...                               |                | `\|res\| == \|l\|`                                                       |
-| `single`                                                                       | `\|l\| == 1`   |                                                                          |
-| `l.zip(l1)`                                                                    |                | `(\|res\| <= \|l\|) && (\|res\| <= \|l1\|)`                              |
+| Interesting operations                                                         | preconditions | postconditions                                                           |
+|--------------------------------------------------------------------------------|---------------|--------------------------------------------------------------------------|
+| `add`                                                                          |               | `\|res\| == \|l\| + 1`                                                   |
+| `isEmpty` (opposite for `isNotEmpty`)                                          |               | `(res == true => \|l\| == 0) && (res == false => \|l\| > 0)`             |
+| `distinct`, `distinctBy`, `drop`, `dropLast`, `take`, `takeLast`, `filter` ... |               | `\|res\| <= \|l\|`                                                       |
+| `first`, `last`, `max`, ...                                                    | `\|l\| > 0`   |                                                                          |
+| `firstOrNull`, `lastOrNull`                                                    |               | `res != null => \|l\| > 0`                                               |
+| `forEach`                                                                      |               | something about number of calls in place related to the size of the list |
+| `map`, `mapIndexed`, `reversed`, `sortedBy`, ...                               |               | `\|res\| == \|l\|`                                                       |
+| `single`                                                                       | `\|l\| == 1`  |                                                                          |
+| `l.zip(l1)`                                                                    |               | `(\|res\| <= \|l\|) && (\|res\| <= \|l1\|)`                              |
 
 ## Encoding as Seq
 
@@ -68,15 +68,30 @@ predicate List(l: Ref) {
     acc(l.size, write) && l.size >= 0
 }
 ```
-Then pre- / post-conditions can be added to stdlib functions by unfolding the predicate.
+Then pre/postconditions can be added to stdlib functions by unfolding the predicate.
 For example `isEmpty` function can be encoded as follows:
 ```
+function sizeEqZero(xs: Ref): Bool
+requires List(xs)
+{
+    unfolding List(xs) in xs.size == 0
+}
+
+function sameSize(xs: Ref, ys: Ref): Bool
+requires List(xs)
+requires xs != ys ==> List(ys)
+{
+    xs != ys 
+    ? unfolding List(xs) in xs.size == unfolding List(ys) in ys.size
+    : true
+}
+
 method isEmpty(xs: Ref) returns(res: Bool)
     requires List(xs)
     ensures List(xs)
-    ensures res == false ==> unfolding List(xs) in xs.size > 0
-    ensures res == true ==> unfolding List(xs) in xs.size == 0
-    ensures old(unfolding List(xs) in xs.size) == unfolding List(xs) in xs.size
+    ensures res == false ==> !sizeEqZero(xs)
+    ensures res == true ==> sizeEqZero(xs)
+    ensures sameSize(xs, old(xs))
 ```
 
 ### Aliasing problem
@@ -94,7 +109,7 @@ requires List(a)
 {
     var res: Ref
     res := zip(a, a)
-    //The pre-condition of method zip might not hold. There might be insufficient permission to access List(xs)
+    //The precondition of method zip might not hold. There might be insufficient permission to access List(xs)
 }
 ```
 
@@ -158,7 +173,7 @@ fun empty (l: List<Int>): Boolean {
 ```
 This can be extended to specify the exact size or a comparison between the size and an integer
 
-### `nonEmpty` pre-condition
+### `nonEmpty` precondition
 
 ```
 fun verifiedFirst (l: List<Int>): Int {
@@ -168,7 +183,7 @@ fun verifiedFirst (l: List<Int>): Int {
 }
 ```
 
-### `unchangedSize` post-condition
+### `unchangedSize` postcondition
 Let consider the following example:
 ```Kotlin
 fun addIfMutable(l: List<Int>) {
@@ -188,7 +203,7 @@ fun notChanged(l: List<Int>) {
 }
 ```
 
-### `nonAliasing` pre-condition
+### `nonAliasing` precondition
 ```
 fun nonAliasing(xs: List<Int>, ys: List<Int>) {
   contract {
