@@ -50,7 +50,7 @@ For each of these effects, we need to understand what information is important t
 #### Calls in Place
 
 The first effect, `callsInPlace`, informs the compiler that a given function parameter will be called a specific number
-of times. The effect accepts two parameters: the *targeted function parameter* and the *kind of invocation*. 
+of times. The effect accepts two parameters: the **targeted function parameter** and the **kind of invocation**.
 We have four kinds of invocations: `EXACTLY_ONCE`, `AT_MOST_ONCE`, `AT_LEAST_ONCE` and `UNKNWON`. 
 When Viper generates a verification error on these effects, the user must understand:
 1. Who is the targeted function.
@@ -76,10 +76,10 @@ Where the placeholders have the following meaning: `{0}` is the function's name,
 `{2}` the targeted function, and `{3}` is the reason why, given by the invocation kind. For each invocation kind
 we have the following messages:
 
-1. `EXACTLY_ONCE`: `just once`.
+1. `EXACTLY_ONCE`: `exactly once`.
 2. `AT_MOST_ONCE`: `at most once`.
 3. `AT_LEAST_ONCE`: `at least once`.
-4. `UNKNWON`: `with a known invocation kind`.
+4. `UNKNWON`: `with a unknown invocation kind`.
 
 #### Conditional Effects
 
@@ -113,15 +113,19 @@ warning: In function `{0}`, the contract `{1}` might not be fulfilled. The retur
 expected one `{3}`.
 ```
 
-It is worth noting that the *condition* can be an `is instance of` predicate. In that case, the error message
+It is worth noting that the condition can be an `is instance of` predicate. In that case, the error message
 can be changed as follows.
 
 ```text
-warning: In function `{0}`, the contract `{1}` might not be fulfilled. The returned value's instance
+warning: In function `{0}`, the contract `{1}` might not be fulfilled. The returned value's type
 might be different from `{4}`.
 ```
 
 Where the placeholder `{4}` is the expected instance type.
+
+#### List Contracts
+
+TODO: see reference [list.md](list.md).
 
 ### Data Structures
 
