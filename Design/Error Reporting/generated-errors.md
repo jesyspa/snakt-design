@@ -50,7 +50,7 @@ From this test suite we get three main verification errors by Viper:
 2. `PreconditionInCallFalse`: a pre-condition fails when invoking a Viper's method.
 3. `AssertFailed` (the only case is `calls_in_place_leak.kt`): an assertion statement might not hold.
 
-Every Viper's Verification error has two piece of information along with them: an string identifier and 
+Every Viper's Verification error has two piece of information along with them: a string identifier and 
 a *reason* (explained below).
 
 Our goal is mapping Viper's errors into Kotlin's ones, providing valuable information to the end-users.
@@ -60,7 +60,8 @@ accordingly:
 
 1.  Error Kind: what type of error Viper generated (violation of post-condition, failed pre-condtion, failed assertion).
 2.  Reason: it informs the user why the error generated. For violation of pre/post-condition is represented by the
-    `AssertionFalse` type.
+    `AssertionFalse` type. The `reason` field also contains an offending node, usually a child of Viper's AST node where
+    verification error is located.
 3.  Offending Node: in which Viper's AST node the error is located at.
 4.  Extra Fields: other fields carried by the error.
 5.  Context: what we were veryfing when the error shown up.
