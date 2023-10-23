@@ -1,0 +1,321 @@
+/*
+ * We consider the following Kotlin code:
+ * 
+ * class IntHolder(val x: Int)
+ * 
+ * @OptIn(ExperimentalContracts::class)
+ * fun <!VIPER_TEXT!>getX<!>(a: Any): Int? {
+ *     contract {
+ *         returnsNotNull() implies (a is IntHolder)
+ *     }
+ *     return (a as? IntHolder)?.x
+ * }
+ * 
+ * Our plugin produces the following (with names somewhat demangled):
+ */
+
+domain Any { }
+
+domain Casting[A, B]  {
+  function cast(a: A, newType: Type): B
+
+  axiom null_cast {
+    (forall newType: Type ::
+      { (cast((null_ref(): Nullable[A]), newType): Nullable[B]) }
+      is_nullable_type(newType) ==>
+      (cast((null_ref(): Nullable[A]), newType): Nullable[B]) ==
+      (null_ref(): Nullable[B]))
+  }
+
+  axiom type_of_cast {
+    (forall a: A, newType: Type ::
+      { (typeOf((cast(a, newType): B)): Type) }
+      isSubtype((typeOf((cast(a, newType): B)): Type),
+      newType))
+  }
+
+  axiom type_of_cast_invariant {
+    (forall a: A, newType: Type ::
+      { (cast(a, newType): B) }
+      (typeOf((cast(a, newType): B)): Type) ==
+      (typeOf(a): Type))
+  }
+}
+
+domain Nullable[T]  {
+  function null_ref(): Nullable[T]
+
+  axiom some_not_null {
+    (forall tx: T, newType: Type ::
+      { (cast(tx, NullableType(newType)): Nullable[T]) }
+      !is_nullable_type(newType) ==>
+      (cast(tx, NullableType(newType)): Nullable[T]) !=
+      (null_ref(): Nullable[T]))
+  }
+
+  axiom null_of_every_nullable_type {
+    (forall nx: Nullable[T], newType: Type ::
+      { isSubtype((typeOf(nx): Type), newType) }
+      is_nullable_type(newType) &&
+      nx == (null_ref(): Nullable[T]) ==>
+      isSubtype((typeOf(nx): Type), newType))
+  }
+
+  axiom val_of_nullable_of_val {
+    (forall tx: T, newType: Type ::
+      { (cast((cast(tx, NullableType(newType)): Nullable[T]),
+      (typeOf(tx): Type)): T) }
+      (cast((cast(tx, NullableType(newType)): Nullable[T]),
+      (typeOf(tx): Type)): T) ==
+      tx)
+  }
+
+  axiom nullable_of_val_of_nullable {
+    (forall nx: Nullable[T], newType: Type ::
+      { (cast((cast(nx, newType): T), (typeOf(nx): Type)): Nullable[T]) }
+      nx != (null_ref(): Nullable[T]) ==>
+      (cast((cast(nx, newType): T), (typeOf(nx): Type)): Nullable[T]) ==
+      nx)
+  }
+
+  axiom null_val_or_under_type {
+    (forall nx: Nullable[T], newType: Type ::
+      { isSubtype((typeOf(nx): Type), NullableType(newType)) }
+      !is_nullable_type(newType) &&
+      isSubtype((typeOf(nx): Type), NullableType(newType)) ==>
+      nx == (null_ref(): Nullable[T]) ||
+      isSubtype((typeOf(nx): Type), newType))
+  }
+}
+
+domain Type  {
+  unique function IntType(): Type
+
+  unique function Boolean(): Type
+
+  unique function UnitType(): Type
+
+  unique function Nothing(): Type
+
+  unique function AnyType(): Type
+
+  unique function Function(): Type
+
+  unique function IntHolder(): Type
+
+  function NullableType(t: Type): Type
+
+  function isSubtype(a: Type, b: Type): Bool
+
+  function is_nullable_type(t: Type): Bool
+
+  axiom {
+    (forall t: Type ::
+      { NullableType(t) }
+      NullableType(t) != IntType())
+  }
+
+  axiom {
+    (forall t: Type ::
+      { NullableType(t) }
+      NullableType(t) != Boolean())
+  }
+
+  axiom {
+    (forall t: Type ::
+      { NullableType(t) }
+      NullableType(t) != UnitType())
+  }
+
+  axiom {
+    (forall t: Type ::
+      { NullableType(t) }
+      NullableType(t) != Nothing())
+  }
+
+  axiom {
+    (forall t: Type ::
+      { NullableType(t) }
+      NullableType(t) != AnyType())
+  }
+
+  axiom {
+    (forall t: Type ::
+      { NullableType(t) }
+      NullableType(t) != Function())
+  }
+
+  axiom {
+    (forall t: Type ::
+      { NullableType(t) }
+      NullableType(t) != IntHolder())
+  }
+
+  axiom {
+    !is_nullable_type(IntType())
+  }
+
+  axiom {
+    !is_nullable_type(Boolean())
+  }
+
+  axiom {
+    !is_nullable_type(UnitType())
+  }
+
+  axiom {
+    !is_nullable_type(Nothing())
+  }
+
+  axiom {
+    !is_nullable_type(AnyType())
+  }
+
+  axiom {
+    !is_nullable_type(Function())
+  }
+
+  axiom {
+    !is_nullable_type(IntHolder())
+  }
+
+  axiom {
+    (forall t: Type ::
+      { NullableType(t) }
+      is_nullable_type(NullableType(t)))
+  }
+
+  axiom {
+    isSubtype(IntType(), AnyType())
+  }
+
+  axiom {
+    isSubtype(Boolean(), AnyType())
+  }
+
+  axiom {
+    isSubtype(UnitType(), AnyType())
+  }
+
+  axiom {
+    isSubtype(Nothing(), AnyType())
+  }
+
+  axiom {
+    isSubtype(AnyType(), AnyType())
+  }
+
+  axiom {
+    isSubtype(Function(), AnyType())
+  }
+
+  axiom {
+    isSubtype(IntHolder(), AnyType())
+  }
+
+  axiom {
+    (forall t: Type ::
+      { isSubtype(t, NullableType(AnyType())) }
+      isSubtype(t, NullableType(AnyType())))
+  }
+
+  axiom {
+    (forall t: Type, t2: Type ::t != t2 ==>
+      NullableType(t) != NullableType(t2))
+  }
+
+  axiom {
+    (forall t: Type ::isSubtype(t, t))
+  }
+
+  axiom {
+    (forall t: Type, t2: Type, t3: Type ::
+      { isSubtype(t, t2), isSubtype(t2, t3) }
+      isSubtype(t, t2) && isSubtype(t2, t3) ==>
+      isSubtype(t, t3))
+  }
+
+  axiom {
+    (forall t: Type, t2: Type ::
+      { isSubtype(t, t2), isSubtype(t2, t) }
+      isSubtype(t, t2) && isSubtype(t2, t) ==> t == t2)
+  }
+
+  axiom {
+    (forall t: Type ::
+      { NullableType(t) }
+      isSubtype(t, NullableType(t)))
+  }
+
+  axiom {
+    (forall t: Type, t2: Type ::
+      { isSubtype(NullableType(t), NullableType(t2)) }
+      isSubtype(t, t2) ==>
+      isSubtype(NullableType(t), NullableType(t2)))
+  }
+
+  axiom {
+    (forall t: Type ::
+      { isSubtype(Nothing(), t) }
+      isSubtype(Nothing(), t))
+  }
+
+  axiom {
+    isSubtype(IntHolder(), AnyType())
+  }
+}
+
+domain TypeOf[T]  {
+  function typeOf(tx: T): Type
+
+  axiom {
+    (forall i: Int ::
+      { (typeOf(i): Type) }
+      (typeOf(i): Type) == IntType())
+  }
+
+  axiom {
+    (forall b: Bool ::
+      { (typeOf(b): Type) }
+      (typeOf(b): Type) == Boolean())
+  }
+}
+
+domain Unit  {
+  function element(): Unit
+
+  axiom {
+    (forall u: Unit ::
+      { (typeOf(u): Type) }
+      (typeOf(u): Type) == UnitType())
+  }
+}
+
+
+field x: Int
+
+method getX(a: Any)
+  returns (ret: Nullable[Int])
+  requires isSubtype(typeOf(a), AnyType())
+  ensures isSubtype(typeOf(ret), NullableType(IntType()))
+  ensures ret != null_ref() ==> isSubtype(typeOf(a), IntHolder())
+{
+  var anon0: Nullable[Ref]
+
+  if (isSubtype(typeOf(a), IntHolder())) {
+    anon0 := cast(a, NullableType(IntHolder()))
+    inhale acc(cast(anon0, IntHolder()).x, wildcard)
+  } else {
+    anon0 := null_ref()
+  }
+
+  if (anon0 == null_ref()) {
+    ret := null_ref()
+  } else {
+    var anon1: Int
+    anon1 := cast(anon0, IntHolder()).x
+    ret := cast(anon1, NullableType(IntType()))
+  }
+}
+
+
