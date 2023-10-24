@@ -301,6 +301,9 @@ interface LinearizationContext {
    fun withUnfoldedPredicate(p: Predicate, action: LinearizationContext.() -> Unit)
    fun withNewScope(action: LinearizationContext.() -> Unit)
    fun withPosition(pos: Position, action: LinearizationContext.() -> Unit)
+
+   fun addStatement(stmt: Stmt)
+   fun addDeclaration(decl: Declaration)
 }
 ```
 
