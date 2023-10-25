@@ -26,7 +26,7 @@ There are a few things that are annoying here:
    to work around this.  This makes converting a statement like `x.y.z`
    complicated: we should be able to perform this as a single expression, but
    end up instead treating `x.y` as a single statement since it must be enclosed
-   in an `inhale`/`exhale`` pair.
+   in an `inhale`/`exhale` pair.
 3. The conversion process is not pure.  The order in which FIR expressions are
    converted can influence the resulting program, which has lead to bugs before.
 4. Sometimes this process gives suboptimal results.  For example, the result of
