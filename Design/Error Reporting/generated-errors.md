@@ -251,8 +251,8 @@ For example:
 
 ### Translating Verification Errors
 
-TODO: where we are going to add this info.
+During the error reporting phase, once we have a verification error, we can fetch the embedded information on offending 
+nodes with a lookup function, according to where the context information is stored.
 
-TODO: understand how to use this information to translate the Viper errors for end-users.
-
-TODO: the next step would be on how to map these errors back to Kotlin.
+Then, once having the kind of verification error and the context error information, we can finally generate the warning
+using the pattern matching on the two values we have.
