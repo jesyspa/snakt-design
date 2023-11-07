@@ -2,7 +2,7 @@ This document explains what are the current challenges faced during error report
 
 ## Problem Statement
 
-After the implementation of [error reporting](generated-errors.md), new challenges arose: 
+After the implementation of [error reporting](generated-errors.md), a new challenge arose: 
 rebuilding missing context information.
 
 Context information refers to the details needed to understand and interpret Viper’s verification errors. 
