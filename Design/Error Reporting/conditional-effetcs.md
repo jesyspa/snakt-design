@@ -12,6 +12,12 @@ contract {
 
 ## Conditional Effects Warning
 
+### Overview
+
+* How the warning messages for conditional effects should look like?
+
+* What level of detail is appropriate for displaying the messages?
+
 Right now, our test-suite has contracts using conditional effects, of the following kind:
 
 * `returns() implies false`
@@ -46,5 +52,5 @@ Sample messages:
 | ------------------------- | ------------------------------------------------------------------------- |
 | Type Assertion            | `The inferenced type of 'x' may/may not be of type 'T'.`                  |
 | Boolean Singleton/Literal | `The conditional effect might not hold due a possible false implication.` |
-| Nullability Checks        | `The variable 'x' might be null/notnull.`                                 |
+| Nullability Checks        | `The variable 'x' might be null/not-null.`                                 |
 | Compound Statement        | `The boolean expression 'e' might not hold.`                              |
