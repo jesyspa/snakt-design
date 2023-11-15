@@ -57,8 +57,11 @@ fun mayReturnNonNull(x: Any?): Any? {
     return x
 }
 ```
-Expected message: This contract cannot be verified because `x` can be a non-null value, therefore the condition
-`x is Int` might not hold.
+The contract implies that if the function returns null, then `x` must be an `Int`. This is the expected behavior based
+on the contract. But, the function can return any value that `x` holds, including non-null values. Since `x` is 
+of type `Any?`, it can be any type, not just `Int`. 
+Therefore, there’s a case where the function does not return `null`, and `x` is not an `Int`, which contradicts 
+the contract’s implication.
 
 ---
 Type: Return not null with type assertion
@@ -73,8 +76,7 @@ fun mayReturnNull(x: Any?): Any? {
     return x
 }
 ```
-Expected message: This contract cannot be verified because `x` can be a null value, therefore the condition `x is Int`
-might not hold.
+The explanation is similar to the one above, but on reverse since now the left-hand side is `returnsNotNull`.
 
 ---
 Type: Returning boolean with nullability condition
@@ -140,7 +142,9 @@ enum class SourceRole {
 
 The `Implies` node is built by the `ContractDescriptionConversionVisitor::visitConditionalEffectDeclaration` function.
 Since the function explores both the left and right-hand sides of the implication, they will contain existing source 
-roles. We can build the warning message using both fetched source roles during the error reporting.
+roles. We can build the warning message using both fetched source roles during the error reporting. We do not need
+any additional data to be stored in `ConditionalEffect`, since the implication sides contains source roles as embedded
+information (thanks to the previous PRs).
 
 ```kotlin
 private fun DiagnosticReporter.reportVerificationErrorUserFriendly(
