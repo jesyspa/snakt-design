@@ -43,22 +43,74 @@ To begin with, an easy solution is breaking down the problem as such:
     c. *Compound Statements*: a generic message similar to the previous one.
 
 
-Sample messages:
+### Contracts
 
-| Left-Hand Side      | Right-Hand Side                 | Message                                                                             |
-| ------------------- | ------------------------------- | ----------------------------------------------------------------------------------- |
-| Bool/Null Predicate | Type Assertion                  | `The type assertion '{0}' might not hold due to potential '{1}' return value`.      |
-| *                   | Nullability Checks              | `The null/non-null check '{0}' might not hold due to potential '{1}' return value.` |
-| *                   | All the rest/Compound Statement | `The boolean expression '{0}' might not hold due to a potential '{1}' return value.`  |
+Type: Returns null with type assertion
 
-Where `{0}` is the `booleanExpression` in the rhs of implication and `{1}` can be: `true`, `false`, `null`, `non-null`.
+Code:
+```kotlin
+@OptIn(ExperimentalContracts::class)
+fun <!VIPER_TEXT!>mayReturnNonNull<!>(x: Any?): Any? {
+    contract {
+        <!VIPER_VERIFICATION_ERROR!>returns(null) implies (x is Int)<!>
+    }
+    return x
+}
+```
+Expected message: This contract cannot be verified because `x` can be a non-null value, therefore the condition
+`x is Int` might not hold.
+
+---
+Type: Return not null with type assertion
+
+Code:
+```kotlin
+@OptIn(ExperimentalContracts::class)
+fun <!VIPER_TEXT!>mayReturnNull<!>(x: Any?): Any? {
+    contract {
+        <!VIPER_VERIFICATION_ERROR!>returnsNotNull() implies (x is Int)<!>
+    }
+    return x
+}
+```
+Expected message: This contract cannot be verified because `x` can be a null value, therefore the condition `x is Int`
+might not hold.
+
+---
+Type: Returning boolean with nullability condition
+
+Code:
+```kotlin
+@OptIn(ExperimentalContracts::class)
+fun <!VIPER_TEXT!>isNullOrEmptyWrong<!>(seq: CharSequence?): Boolean {
+    contract {
+        <!VIPER_VERIFICATION_ERROR!>returns(false) implies (seq != null)<!>
+    }
+    return seq != null && seq.length > 0
+}
+```
+The premise of this contract is not satisfied with its actual implementation, we have a contradiction.
+The contract claims that a `false` return value guarantees `seq` is not `null`, but the function’s logic does not support this guarantee. The solution of this contract would be to switch to an `||` statement
+
+---
+Type: Empty Returns with type assertion
+
+Code: 
+```kotlin
+@OptIn(ExperimentalContracts::class)
+fun <!VIPER_TEXT!>unverifiableTypeCheck<!>(x: Int?): Boolean {
+    contract {
+        <!VIPER_VERIFICATION_ERROR!>returns() implies (x is Unit)<!>
+    }
+    return x is String
+}
+```
+This contract cannot be verified because the type assertion of the conditional effect might not hold. The function’s return statement is asserting that `x` is a `String` not a `Unit`.
 
 ## Implementation
 
-> NOTE: this part is still work in progress.
-
 We start implementing the generic message. We need to output the boolean expression `e` that may fail. Thus, we have to 
-provide to the error interpreter (`VerificatiofailrInterpreter`) its FIR representation.
+provide to the error interpreter (`VerificatioErrorInterpreter`) its FIR representation.
 
 In our test suite, we always get a `PostconditionViolated` error from Viper. The error contains which assertion went
 wrong during the analysis. The offending node is always an implication node. Thus, we can embed a new source-role
@@ -77,12 +129,18 @@ The new source-role assigned during the visit of a conditional effect will be ca
 ```kotlin
 enum class SourceRole {
     // ...
-    data class ConditionalEffect(val booleanExpression: ???)
+    data class ConditionalEffect : SourceRole {
+        fun ErrorReason.getLhsRole(): SourceRole = ...
+        fun ErrorReason.getRhsRole(): SourceRole = ...
+    }
 }
 ```
 
-*OPEN QUESTION*:
-Here we have the first problem to solve, what is the type of `booleanExpression`? It should be a `FirBasedSymbol<*>`,
-but the contract description visitor does not allow accessing the FIR’s symbol of a condition when visiting a 
-conditional effect.
+The `Implies` node is built by the `ContractDescriptionConversionVisitor::visitConditionalEffectDeclaration` function.
+Since the function explores both the left and right-hand sides of the implication, they will contain existing source 
+roles. We can build the warning message using both fetched source roles.
 
+TODO: this part is still **working in progress**:
+
+* The next thing is defining how to interpret the source roles from both sides to produce the warning message.
+* How to format the output message.
