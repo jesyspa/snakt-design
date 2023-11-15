@@ -112,8 +112,8 @@ This contract cannot be verified because the type assertion of the conditional e
 We start implementing the generic message. We need to output the boolean expression `e` that may fail. Thus, we have to 
 provide to the error interpreter (`VerificatioErrorInterpreter`) its FIR representation.
 
-In our test suite, we always get a `PostconditionViolated` error from Viper. The error contains which assertion went
-wrong during the analysis. The offending node is always an implication node. Thus, we can embed a new source-role
+In our test suite, we always get a `PostconditionViolated` error from Viper. The error contains which assertion failed 
+to hold during the analysis. The offending node is always an *implication* node. Thus, we can embed a new source-role
 into that implication.
 
 ```kotlin
@@ -138,7 +138,24 @@ enum class SourceRole {
 
 The `Implies` node is built by the `ContractDescriptionConversionVisitor::visitConditionalEffectDeclaration` function.
 Since the function explores both the left and right-hand sides of the implication, they will contain existing source 
-roles. We can build the warning message using both fetched source roles.
+roles. We can build the warning message using both fetched source roles during the error reporting.
+
+```kotlin
+private fun DiagnosticReporter.reportVerificationErrorUserFriendly(
+        source: KtSourceElement?,
+        error: VerificationError,
+        context: CheckerContext,
+    ) {
+        when (val role = error.getInfoOrNull<SourceRole>()) {
+            // ... - other cases
+            is SourceRole.ConditionalEffect -> with(role) {
+                val lhsRole = error.reason.getLhsRole()
+                val rhsRole = error.reason.getRhsRole()
+                TODO("How do we interpret these roles?")
+            }
+        }
+    }
+```
 
 TODO: this part is still **working in progress**:
 
