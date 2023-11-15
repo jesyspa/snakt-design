@@ -50,9 +50,9 @@ Type: Returns null with type assertion
 Code:
 ```kotlin
 @OptIn(ExperimentalContracts::class)
-fun <!VIPER_TEXT!>mayReturnNonNull<!>(x: Any?): Any? {
+fun mayReturnNonNull(x: Any?): Any? {
     contract {
-        <!VIPER_VERIFICATION_ERROR!>returns(null) implies (x is Int)<!>
+        returns(null) implies (x is Int)
     }
     return x
 }
@@ -66,9 +66,9 @@ Type: Return not null with type assertion
 Code:
 ```kotlin
 @OptIn(ExperimentalContracts::class)
-fun <!VIPER_TEXT!>mayReturnNull<!>(x: Any?): Any? {
+fun mayReturnNull(x: Any?): Any? {
     contract {
-        <!VIPER_VERIFICATION_ERROR!>returnsNotNull() implies (x is Int)<!>
+        returnsNotNull() implies (x is Int)
     }
     return x
 }
@@ -82,15 +82,16 @@ Type: Returning boolean with nullability condition
 Code:
 ```kotlin
 @OptIn(ExperimentalContracts::class)
-fun <!VIPER_TEXT!>isNullOrEmptyWrong<!>(seq: CharSequence?): Boolean {
+fun isNullOrEmptyWrong(seq: CharSequence?): Boolean {
     contract {
-        <!VIPER_VERIFICATION_ERROR!>returns(false) implies (seq != null)<!>
+        returns(false) implies (seq != null)
     }
     return seq != null && seq.length > 0
 }
 ```
 The premise of this contract is not satisfied with its actual implementation, we have a contradiction.
-The contract claims that a `false` return value guarantees `seq` is not `null`, but the function’s logic does not support this guarantee. The solution of this contract would be to switch to an `||` statement
+The contract claims that a `false` return value guarantees `seq` is not `null`, but the function’s logic does not 
+support this guarantee. The solution of this contract would be to switch to an `||` statement.
 
 ---
 Type: Empty Returns with type assertion
@@ -98,14 +99,15 @@ Type: Empty Returns with type assertion
 Code: 
 ```kotlin
 @OptIn(ExperimentalContracts::class)
-fun <!VIPER_TEXT!>unverifiableTypeCheck<!>(x: Int?): Boolean {
+fun unverifiableTypeCheck<!>(x: Int?): Boolean {
     contract {
-        <!VIPER_VERIFICATION_ERROR!>returns() implies (x is Unit)<!>
+        returns() implies (x is Unit)
     }
     return x is String
 }
 ```
-This contract cannot be verified because the type assertion of the conditional effect might not hold. The function’s return statement is asserting that `x` is a `String` not a `Unit`.
+This contract cannot be verified because the type assertion of the conditional effect might not hold. 
+The function’s return statement is asserting that `x` is a `String` not a `Unit`.
 
 ## Implementation
 
