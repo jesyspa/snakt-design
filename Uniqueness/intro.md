@@ -120,10 +120,10 @@ class X {
 ```
 
 The `inPlace` keyword may be used on the declarations of
-read-only variables and parameters:
+variables and parameters:
 ```kotlin
 fun example(inPlace unique x: X) {
-    inPlace val y = x
+    inPlace var y = x
 }
 ```
 
@@ -200,7 +200,7 @@ somehow.
 
 A variable `x` marked `unique` has the following property:
 whenever `x` is accessible and non-null, it is the only
-reference to the object that `x` refers to.
+accessible reference to the object that `x` refers to.
 
 A function with a return type marked `unique` returns a
 reference that is either `null` or that is the only
@@ -211,9 +211,33 @@ past the lifetime of `x`.  That is, if we follow the value
 originating from `x` in the data flow graph, no path it
 takes may outlive `x`.
 
-### Restrictions
+### `unique` variables
 
-TODO: permitted operations
+There are four operations permitted on a variable marked
+`unique`:
+1. "Forget" the uniqueness and make it a normal variable.
+2. Borrow it as `unique inPlace`.
+3. Move it to a new `unique` variable.
+4. Capture it in a lambda.
+
+When a `unique` variable `x` is borrowed by `y`, we record
+that `x` becomes unavailable for the lifetime of `y`.
+
+The capture of a `unique` variable `x` is an interesting
+point.  There are two possibilities:
+1. If the lambda is bound to an `inPlace` variable `y`, then
+   the capture borrows `x` for as long as `y` exists.
+2. If the lambda is bound to a normal variable, then the
+   capture moves `x`.
+
+Note that invoking a lambda binds it to an `inPlace`
+variable; we consider the receiver of `invoke` on a lambda
+to be implicitly marked `inPlace`.
+
+### `inPlace` variables
+
+TODO: figure out how to express this
+
 
 ## MVP proposal
 
@@ -271,4 +295,34 @@ Some more design points:
 - How can these changes be used for our Viper translation?
 - How can `unique` interact with data structures?
 - How can `inPlace` be used on `var` variables?
+
+### Talking about our changes
+
+Our proposal extends the type system of Kotlin to include
+information on uniqueness and inPlace-ness.  To the user,
+this seems like it only concerns variables and function
+parameters, but this is inaccurate: to implement this
+feature, we will need to reason about the uniqueness and
+inPlace-ness of arbitrary expressions.
+
+Do we want to introduce the notion of an "inPlace
+expression" to the user?
+
+A related problem is that the `unique` modifier is tempting
+to interpret in the context of objects: one could say that
+an object is uniquely referenced when there exists a single
+reference to it.  However, this is not quite what the
+keyword means.  In the context of values and paremeters we
+can interpret it that way, but if we plan to expand this to
+objects we have a problem: a `unique` field should not only
+refer to a uniquely referenced object, but should also
+itself be only accessible via a unique object; otherwise,
+the knowledge that it is unique tells us nothing.
+
+(The notion "uniquely referenced" also presumes some kind of
+computational model where we can count the references as
+they are generated.  The JVM provides this, but it is not
+the lens through which we want to look at this problem: we
+are interested in what the programmer can express, not what
+someone inspecting the JVM can see.)
 
