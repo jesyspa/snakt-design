@@ -1,13 +1,13 @@
 # Uniqueness and borrowing annotations in Kotlin
 
 
-## Motivation
+## Introduction
 
 In Kotlin, objects can and often are widely shared.  This
 is an important part of the design of the language, and
 allows for space savings via reuse.  However, the fact that
 an object may be modified via another reference to it means
-that it can be hard to impose guarantees locally.  For
+that it can be hard to reason about its value.  For
 example, users are often surprised that code like the
 following does not permit a smart cast:
 
@@ -43,7 +43,7 @@ fun runIfXNonNull(unique y: Y, f: (X) -> Unit) {
 ```
 
 There is, however, a problem with this function: we have
-required that `y` is a unique reference when the function is
+required that `y` be a unique reference when the function is
 called, and hence `runIfXNonNull` will "consume" the `y`
 reference and make it inaccessible.  On the call-site,
 the situation looks as follows:
@@ -54,16 +54,16 @@ runIfXNonNull(y) { ... }
 // y cannot be used anymore
 ```
 
-*Note:* The astute reader will notice that there is another
-design choice possible here: instead of making `y`
-inaccessible, we can make `y` non-`unique`.  We expand on
-the considerations later.
+*Note:* A possible alternative design choice is to make `y`
+non-unique after the call.  We discuss this choice in the
+Design Choices section.
 
 To permit passing `unique` values to functions without
 losing access to them,  we introduce the keyword `inPlace`
-that indicates that a certain reference does not leak from
-the scope it is declared in; that is, that every copy made
-of this reference lives no longer than the reference itself.
+that indicates that the value of a certain variable does not
+leak from the scope it is declared in; that is, that every
+copy made of this variable lives no longer than the
+reference itself.
 
 This makes the following code valid:
 
@@ -89,11 +89,10 @@ fun runIfXNonNull(inPlace unique y: Y, f: (X) -> Unit) {
 }
 ```
 
-In this document we focus on teh practical uses and
-implementation challenges of this proposal.  We describe the
-syntax and semantics of our proposed feature in full and
-then propose an MVP that contains the majority of the logic
-and can be expressed using the contracts DSL.
+In this document we introduce this proposal at a high level.
+We describe the syntax and semantics of our proposed feature
+in full and then propose an MVP that contains the majority
+of the logic and can be expressed using the contracts DSL.
 
 
 ## Syntax
@@ -111,7 +110,7 @@ fun example(unique x: X) {
 }
 ```
 
-* On return types and getters:
+* On function return types and getters:
 ```kotlin
 class X {
     fun clone(): unique X { ... }
@@ -120,10 +119,8 @@ class X {
 }
 ```
 
-The `inPlace` keyword may be used on read-only variable and
-parameter declarations, where it may be combined with the
-`unique`
-keyword:
+The `inPlace` keyword may be used on the declarations of
+read-only variables and parameters:
 ```kotlin
 fun example(inPlace unique x: X) {
     inPlace val y = x
@@ -131,13 +128,13 @@ fun example(inPlace unique x: X) {
 ```
 
 There needs to be syntax for specifying that the `this`
-parameter is in place; we do not yet have a suggestion for
+parameter is `inPlace`; we do not yet have a suggestion for
 this.
 
-The function `forgetUniqueness` has the following siganture:
+The function `forgetUniqueness` has the following signature:
 
 ```kotlin
-fun<R> forgetUniqueness(r: R): R
+fun <R> forgetUniqueness(r: R): R
 ```
 
 
@@ -146,96 +143,77 @@ fun<R> forgetUniqueness(r: R): R
 In this section we describe in detail the intended results
 of using the `unique` and `inPlace` keywords.  We focus on
 the guarantees a programmer can expect about the resulting
-code, without explicitly specifying what operations are
-permitted or how these guarantees are ensured.
+code, and give an overview of what operations are and are
+not permitted.
 
 Throughout this section we will conflate variables and
 parameters, using "variable" to refer to both.
 
-### Accessibility
+### High-level semantics
 
-In standard Kotlin, any variable that is in scope can be
-used.  In the presence of borrowing, this breaks down.
-When a `unique` variable is borrowed we cannot provide the
-guarantees that it should have, and hence we must ensure
-that it is not accessed.  For example:
+Our proposal is built on three fundamental ideas:
+- There are restrictions on what can be done with `unique`
+  variables which allow for stronger static analysis of
+  them.
+- Some of these restrictions can be temporary lifted by
+  *borrowing* the `unique` variable using an `inPlace` variable.
+- While a `unique` variable is borrowed from, it is not
+  *accessible*: it cannot be read from or written to.
+
+The following example demonstrates the interplay between
+these three ideas:
 
 ```kotlin
 class X(val x: Int)
 class Y(var xref: X?)
 
-fun example(inPlace unique y: Y, f: () -> Unit): X =
-    if (y.xref != null) {
+fun example(inPlace unique y2: Y, f: () -> Unit): X =
+    if (y2.xref != null) {
         f()
-        y.xref
+        y2.xref
     }
     else X(0)
 
 // elsewhere:
-unique val y = getUniqueY()
-example(y) { y.xref = null }
+unique val y1 = getUniqueY()
+val x = example(y1) { y1.xref = null }
 ```
 
-If we permitted this code to compile, the smart cast in
-`example` would be permitted (since `y` is `unique`) but in
-fact the call to `f` will have changed the value to null.
+If we analyse `example` in isolation, the smartcast of
+`y.xref` from `X?` to `X` is valid under our rules since
+`y2` is `unique`.
 
-We call a variable *accessible* if its value can be used in
-a certain context and *inaccessible* otherwise.
+If we also consider the call-site, we see that because
+`y1.xref` is set to `null` by the lambda, the program as a
+whole is incorrect: `example` may return `null` even though
+its type is `X`.
 
+Our third idea resolves this: `y1` is borrowed by `y2`,
+and thus it is inaccessible in the lambda and we reject this
+code.
 
-### `unique`
+TODO: inaccessibility arises also when we move/consume a
+unique value.  This needs to be worked into the text
+somehow.
 
-A variable marked `unique` has the following property:
-whenever the variable is accessible and non-null, it is the
-only reference to the object that it refers to.
+### Guarantees
 
-In particular, the only way to modify the fields of an
-object referred to by a `unique` variable `x` is using an
-explicit access to `x`.  This means that we can assume that
-any modification can be detected from the program text,
-allowing us to make stronger assumptions.
-
-These modifications can come in two forms.  Aside from
-direct writes to the variable, the value of the variable may
-be borrowed by an `inPlace` variable.  When the borrow is
-returned, the value may have changed.
+A variable `x` marked `unique` has the following property:
+whenever `x` is accessible and non-null, it is the only
+reference to the object that `x` refers to.
 
 A function with a return type marked `unique` returns a
 reference that is either `null` or that is the only
 reference to the return value.
 
-### `inPlace`
+The value of a variable `x` marked `inPlace` does not leak
+past the lifetime of `x`.  That is, if we follow the value
+originating from `x` in the data flow graph, no path it
+takes may outlive `x`.
 
-A variable marked `inPlace` can be initialised from a
-`unique` variable and "borrows" the value: that is, the
-original `unique` variable becomes inaccessible for the
-duration of the borrow, which lasts for as long as the
-`inPlace` variable exists.
+### Restrictions
 
-A variable that is `inPlace` guarantees that any copies made
-of its value exist only for as long as the variable itself
-does: that is, any copies must themselves be `inPlace`.
-This ensures that once the borrow ends, if the value was
-originally copied from a `unique` variable, that variable
-again satisfies the rule for a `unique` variable.
-
-Note that this is exactly the rule that already exists for
-`callsInPlace` functions.  We simply extend this to
-variables of any types, and introduce an interaction between
-`inPlace` variables and `unique` variables.
-
-
-### `forgetUniqueness`
-
-A variable that is `unique` can lose its uniqueness via
-sharing.  `forgetUniqueness` does this explicitly: it
-returns a copy of the passed value and the original variable
-loses the `unique` predicate.
-
-*Note:* Another option is to make the original variable
-inaccessible, we should see what is preferable.
-
+TODO: permitted operations
 
 ## MVP proposal
 
@@ -270,6 +248,10 @@ TODO:
 * We have a paper in progress about 1.
 * kotlinc already has a lot of support for callsInPlace,
   this looks like it should be comparable in difficulty.
+
+Some more design points:
+* Why make variables inaccessible after they have been
+  passed as unique?
 
 ## Open design questions
 
