@@ -60,8 +60,7 @@ fun mayReturnNonNull(x: Any?): Any? {
 This contract may not be satisfied because the implication `returns(null) implies (x is Int)` is false when we
 are returning a `null` but `x` is not of type `Int`. In this case, `x: Any?`, so let’s assume that we have 
 `mayReturnNonNull(null)`, therefore, `x = null`, the premises hold, but the conclusion is wrong (`x is Int`),
-that’s because `x = null \not\in Int`.
-
+that’s because `x = null !is Int`.
 
 ---
 Type: Return not null with type assertion (1)
@@ -109,10 +108,10 @@ fun isNullOrEmptyWrong(seq: CharSequence?): Boolean {
     return seq != null && seq.length > 0
 }
 ```
-The premise of this contract is not satisfied with its actual implementation, we have a contradiction.
-The contract claims that a `false` return value guarantees `seq` is not `null`, but the function’s logic does not 
-support this guarantee. If `seq = null` then the returning condition is `false`, satisfying the implication premises,
-but this contradicts the conclusion (`seq != null`).
+This contract may not be satisfied because the implication `returns(false) implies (seq != null)` is false when the
+given `seq` parameter is `null`. When invoking `isNullOrEmptyWrong(null)` the function will return a `false` value
+due to the `seq != null && seq.length > 0` condition. So, the implication’s premises hold but the conclusion
+`seq != null` does not, because `seq = null`. 
 
 ---
 Type: Returns true with type assertion
@@ -127,9 +126,9 @@ fun returnsTrueWithTypeAssertion<!>(x: Any?): Boolean {
     return (x == null)
 }
 ```
-This contract may not be satisfied due to a contradiction. We return `true` when `x` is equal to null, therefore,
-the implication’s premises hold. But, since `null \not\in Int` then the conclusion does not hold, leading to a
-contradiction.
+This contract may not be satisfied. We return `true` when `x` is equal to null, therefore,
+the implication’s premises hold. But, since `null !is Int` then the conclusion does not hold, leading to get a `false`
+implication.
 
 ---
 Type: Empty returns with type assertion
@@ -148,8 +147,7 @@ but `x: Any` may not be of type `Int`.
 
 ## Implementation
 
-We start implementing the generic message. We need to output the boolean expression `e` that may fail. Thus, we have to 
-provide to the error interpreter (`VerificatioErrorInterpreter`) its FIR representation.
+We start implementing the generic message.
 
 In our test suite, we always get a `PostconditionViolated` error from Viper. The error contains which assertion failed 
 to hold during the analysis. The offending node is always an *implication* node. Thus, we can embed a new source-role
