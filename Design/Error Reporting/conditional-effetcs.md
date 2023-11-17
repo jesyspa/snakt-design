@@ -57,13 +57,25 @@ fun mayReturnNonNull(x: Any?): Any? {
     return x
 }
 ```
-This contract may not be satisfied because the implication `returns(null) implies (x is Int)` is false when we
-are returning a `null` but `x` is not of type `Int`. In this case, `x: Any?`, so let’s assume that we have 
-`mayReturnNonNull(null)`, therefore, `x = null`, the premises hold, but the conclusion is wrong (`x is Int`),
-that’s because `x = null !is Int`.
+
+Generalization:
+
+* Implication: `returns(null) => (x is T)`
+* Failing implication: `returns(null)` holds true, `(x is T)` holds false (T implies F = F)
+* Counter-example: 
+    * `x` is of type different from `T`.
+    * the function returns a `null` value.
+    * the type assertion predicate does not hold because the target variable (`x`) is not the expected type (`T`).
+
+Concrete counter-example:
+* We invoke the function `mayReturnNonNull(null)`.
+* The function returns `x`, and so `null`.
+* The implication’s premises hold (we returned `null`).
+* The implication’s conclusion does not hold, since `null !is Int`.
 
 ---
-Type: Return not null with type assertion (1)
+
+Type: Returns not-null with type assertion (1)
 
 Code:
 ```kotlin
@@ -74,16 +86,7 @@ fun notNullWithTypeAssertion1(x: Any?): Any? {
     }
     return x
 }
-```
-This contract may not be satisfied because the implication `returnsNotNull() implies (x is Int)` is false when we are
-returning a non-value and `x` is not of type `Int`. As an example: `notNullWithTypeAssertio1("Hello!")`, we are 
-returning a non-null value, but `x` is a `String`.
 
----
-Type: Returns not null with type assertion (2)
-
-Code:
-```kotlin
 @OptIn(ExperimentalContracts::class)
 fun notNullWithTypeAssertion2(x: Any?, y: Int): Any? {
     contract {
@@ -92,10 +95,30 @@ fun notNullWithTypeAssertion2(x: Any?, y: Int): Any? {
     return y
 }
 ```
-This contract may not be satisfied because we are always returning a non-null value (`y: Int`), but since `x: Any?` 
-it may not be of type `Int` (`x` in input could be a `Bool?`, `Char`, …): `notNullWithTypeAssertion(null, 42)`.
+
+Generalization:
+
+* Implication: `returnsNotNull() => (x is T)`
+* Failing implication: `returnsNotNull()` holds true, `(x is T)` holds false (T implies F = F).
+* Counter-example: 
+    * `x` is of type different from `T`.
+    * the function returns a non-`null` value.
+    * the type assertion predicate does not hold because the target variable (`x`) is not the expected type (`T`).
+
+Concrete counter-example (for `notNullWithTypeAssertion1`):
+* We invoke the function `notNullWithTypeAssertion1("Hello")`.
+* The function returns `x`, and so `"Hello"`.
+* The implication’s premises hold (we returned a value different from `null`).
+* The implication’s conclusion does not hold, since `"Hello" !is Int`.
+
+Concrete counter-example for `notNullWithTypeAssertion2`:
+* We invoke the function `notNullWithTypeAssertion2(x = null, y = 42)`.
+* The function returns `y`, and so `42`.
+* The implication’s premises hold (we returned a value different from `null`).
+* The implication’s conclusion does not hold, since `x = null` and `x !is Int`.
 
 ---
+
 Type: Returning boolean with nullability condition
 
 Code:
@@ -108,29 +131,54 @@ fun isNullOrEmptyWrong(seq: CharSequence?): Boolean {
     return seq != null && seq.length > 0
 }
 ```
-This contract may not be satisfied because the implication `returns(false) implies (seq != null)` is false when the
-given `seq` parameter is `null`. When invoking `isNullOrEmptyWrong(null)` the function will return a `false` value
-due to the `seq != null && seq.length > 0` condition. So, the implication’s premises hold but the conclusion
-`seq != null` does not, because `seq = null`. 
+
+Generalization:
+
+* Implication: `returns(bool) => (x != null)`
+* Failing implication: `returns(bool)` holds true, `(x != null)` holds false (T implies F = F)
+* Counter-example: 
+    * we return the expected boolean value.
+    * the nullability condition does not hold.
+
+Concrete counter-example:
+* We invoke the function `isNullOrEmptyWrong(null)`.
+* The function returns `seq != null && seq.length > 0`.
+* Since `seq = null`, the returned boolean expression is `false`.
+* The implication’s premises hold (we returned `false`).
+* The implication’s conclusion does not hold, since `seq` is `null`.
 
 ---
-Type: Returns true with type assertion
+
+Type: Returns boolean with type assertion
 
 Code: 
 ```kotlin
 @OptIn(ExperimentalContracts::class)
-fun returnsTrueWithTypeAssertion<!>(x: Any?): Boolean {
+fun returnsTrueWithTypeAssertion(x: Any?): Boolean {
     contract {
         returns(true) implies (x is Int)
     }
     return (x == null)
 }
 ```
-This contract may not be satisfied. We return `true` when `x` is equal to null, therefore,
-the implication’s premises hold. But, since `null !is Int` then the conclusion does not hold, leading to get a `false`
-implication.
+
+Generalization:
+
+* Implication: `returns(bool) => (x is T)`
+* Failing implication: `returns(bool)` holds true, `(x is T)` holds false (T implies F = F)
+* Counter-example: 
+    * `x` is of type different from `T`.
+    * the function returns the expected `bool` value.
+    * the type assertion predicate does not hold because the target variable (`x`) is not the expected type (`T`).
+
+Concrete counter-example:
+* We invoke the function `returnsTrueWithTypeAssertion(null)`.
+* The function returns `x == null`, so `true`.
+* The implication’s premises hold (we returned `true`).
+* The implication’s conclusion does not hold, since `null !is Int`.
 
 ---
+
 Type: Empty returns with type assertion
 
 ```kotlin
@@ -141,9 +189,21 @@ fun emptyReturnsWithTypeAssertion(x: Any?) {
     }
 }
 ```
-This contract may not be satisfied because the implication may be false. We are always returning from the function,
-but `x: Any` may not be of type `Int`.
 
+Generalization:
+
+* Implication: `returns() => (x is T)`
+* Failing implication: `returns()` holds true, `(x is T)` holds false (T implies F = F)
+* Counter-example: 
+    * `x` is of type different from `T`.
+    * the function returns.
+    * the type assertion predicate does not hold because the target variable (`x`) is not the expected type (`T`).
+
+Concrete counter-example:
+* We invoke the function `emptyReturnsWithTypeAssertion(null)`.
+* The function returns.
+* The implication’s premises hold.
+* The implication’s conclusion does not hold, since `null !is Int`.
 
 ## Implementation
 
