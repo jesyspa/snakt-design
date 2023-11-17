@@ -57,26 +57,44 @@ fun mayReturnNonNull(x: Any?): Any? {
     return x
 }
 ```
-The contract implies that if the function returns null, then `x` must be an `Int`. This is the expected behavior based
-on the contract. But, the function can return any value that `x` holds, including non-null values. Since `x` is 
-of type `Any?`, it can be any type, not just `Int`. 
-Therefore, there’s a case where the function does not return `null`, and `x` is not an `Int`, which contradicts 
-the contract’s implication.
+This contract may not be satisfied because the implication `returns(null) implies (x is Int)` is false when we
+are returning a `null` but `x` is not of type `Int`. In this case, `x: Any?`, so let’s assume that we have 
+`mayReturnNonNull(null)`, therefore, `x = null`, the premises hold, but the conclusion is wrong (`x is Int`),
+that’s because `x = null \not\in Int`.
+
 
 ---
-Type: Return not null with type assertion
+Type: Return not null with type assertion (1)
 
 Code:
 ```kotlin
 @OptIn(ExperimentalContracts::class)
-fun mayReturnNull(x: Any?): Any? {
+fun notNullWithTypeAssertion1(x: Any?): Any? {
     contract {
         returnsNotNull() implies (x is Int)
     }
     return x
 }
 ```
-The explanation is similar to the one above, but on reverse since now the left-hand side is `returnsNotNull`.
+This contract may not be satisfied because the implication `returnsNotNull() implies (x is Int)` is false when we are
+returning a non-value and `x` is not of type `Int`. As an example: `notNullWithTypeAssertio1("Hello!")`, we are 
+returning a non-null value, but `x` is a `String`.
+
+---
+Type: Returns not null with type assertion (2)
+
+Code:
+```kotlin
+@OptIn(ExperimentalContracts::class)
+fun notNullWithTypeAssertion2(x: Any?, y: Int): Any? {
+    contract {
+        returnsNotNull() implies (x is Int)
+    }
+    return y
+}
+```
+This contract may not be satisfied because we are always returning a non-null value (`y: Int`), but since `x: Any?` 
+it may not be of type `Int` (`x` in input could be a `Bool?`, `Char`, …): `notNullWithTypeAssertion(null, 42)`.
 
 ---
 Type: Returning boolean with nullability condition
@@ -93,23 +111,40 @@ fun isNullOrEmptyWrong(seq: CharSequence?): Boolean {
 ```
 The premise of this contract is not satisfied with its actual implementation, we have a contradiction.
 The contract claims that a `false` return value guarantees `seq` is not `null`, but the function’s logic does not 
-support this guarantee. The solution of this contract would be to switch to an `||` statement.
+support this guarantee. If `seq = null` then the returning condition is `false`, satisfying the implication premises,
+but this contradicts the conclusion (`seq != null`).
 
 ---
-Type: Empty Returns with type assertion
+Type: Returns true with type assertion
 
 Code: 
 ```kotlin
 @OptIn(ExperimentalContracts::class)
-fun unverifiableTypeCheck<!>(x: Int?): Boolean {
+fun returnsTrueWithTypeAssertion<!>(x: Any?): Boolean {
     contract {
-        returns() implies (x is Unit)
+        returns(true) implies (x is Int)
     }
-    return x is String
+    return (x == null)
 }
 ```
-This contract cannot be verified because the type assertion of the conditional effect might not hold. 
-The function’s return statement is asserting that `x` is a `String` not a `Unit`.
+This contract may not be satisfied due to a contradiction. We return `true` when `x` is equal to null, therefore,
+the implication’s premises hold. But, since `null \not\in Int` then the conclusion does not hold, leading to a
+contradiction.
+
+---
+Type: Empty returns with type assertion
+
+```kotlin
+@OptIn(ExperimentalContracts::class)
+fun emptyReturnsWithTypeAssertion(x: Any?) {
+    contract {
+        returns() implies (x is Int)
+    }
+}
+```
+This contract may not be satisfied because the implication may be false. We are always returning from the function,
+but `x: Any` may not be of type `Int`.
+
 
 ## Implementation
 
