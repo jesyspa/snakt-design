@@ -210,34 +210,109 @@ Concrete counter-example:
 We start implementing the generic message.
 
 In our test suite, we always get a `PostconditionViolated` error from Viper. The error contains which assertion failed 
-to hold during the analysis. The offending node is always an *implication* node. Thus, we can embed a new source-role
-into that implication.
+to hold during the analysis. The offending node is always an *implication* node. Thus, we can embed a new source role,
+called `SourceRole.ConditionalEffect`, into the implication embedding.
 
 ```kotlin
+// org/jetbrains/kotlin/formver/embeddings/expression/Boolean.kt
 data class Implies(
     override val left: ExpEmbedding,
     override val right: ExpEmbedding,
     override val sourceRole: SourceRole? = null
 ) : BinaryBooleanExpression
-```
 
-The new source-role assigned during the visit of a conditional effect will be called `SourceRole.ConditionalEffect`.
-
-```kotlin
-enum class SourceRole {
+// org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
+sealed interface SourceRole {
     // ...
-    data class ConditionalEffect : SourceRole {
-        fun ErrorReason.getLhsRole(): SourceRole = ...
-        fun ErrorReason.getRhsRole(): SourceRole = ...
+    data class ConditionalEffect(val lhs: SourceRole, val rhs: SourceRole) : SourceRole {
+        // Utility functions to perform value destructuring
+        operator fun component1(): SourceRole = lhs
+        operator fun component2(): SourceRole = rhs
     }
 }
 ```
 
 The `Implies` node is built by the `ContractDescriptionConversionVisitor::visitConditionalEffectDeclaration` function.
-Since the function explores both the left and right-hand sides of the implication, they will contain existing source 
-roles. We can build the warning message using both fetched source roles during the error reporting. We do not need
-any additional data to be stored in `ConditionalEffect`, since the implication sides contains source roles as embedded
-information (thanks to the previous PRs).
+
+Thanks to the previous PRs on warning messages, some `ExpEmbedding`s already have a `SourceRole` on them. 
+This means, that when we explore the lhs of a conditional effect, the created `ExpEmbedding` will have a source role
+already. However, this is not always the case for the rhs, that may not have any source role. Thus, we need to 
+add new source roles for the missing rhs:
+
+*   *type predicate* (e.g., `x is T` / `x !is T`): we add new source role `SourceRole.IsTypePredicate`, defined as 
+    follows:
+
+    ```kotlin
+    // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
+
+    data class IsTypePredicate(
+        val targetVariable: FirBasedSymbol<*>, 
+        val expectedType: ConeKotlinType, 
+        val negated: Boolean = false // used for '!is' case
+    ) : SourceRole
+    ```
+
+*   *null predicate* (e.g., `x == null` / `x != null`): we add the new source role `SourceRole.NullPredicate`, defined
+    as follows:
+
+    ```kotlin
+    // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
+
+    data class NullPredicate(
+        val targetVariable: FirBasedSymbol<*>,
+        val negated: Boolean = false // used for '!= null' case
+    ) : SourceRole
+    ```
+
+*   *boolean literals* (e.g., `true` / `false`): we add the new source role `SourceRole.BooleanLiteral`, defined as
+    follows:
+
+    ```kotlin
+    // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
+
+    data class BooleanLiteral(val literal: Boolean) : SourceRole
+    ```
+
+*   *compound predicates* (e.g., `A && B`, `A || B`, `!A`): we add the following new source roles:
+
+    ```kotlin
+    // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
+
+    /* Models && predicate. */
+    data class ConjunctivePredicate(val lhs: SourceRole, val rhs: SourceRole) : SourceRole {
+        operator fun component1(): SourceRole = lhs
+        operator fun component2(): SourceRole = rhs
+    }
+
+    /* Models || predicate. */
+    data class DisjunctivePredicate(val lhs: SourceRole, val rhs: SourceRole) : SourceRole {
+        operator fun component1(): SourceRole = lhs
+        operator fun component2(): SourceRole = rhs
+    }
+
+    /* Models ! predicate. */
+    data class NegationPredicate(val negated: SourceRole) : SourceRole
+    ```
+
+    These definitions allow inspecting predicates at a deeper level during the error reporting phase.
+
+Since the function `visitConditionalEffectDeclaration` explores both the left and right-hand sides of the implication, 
+they will contain their respective source roles defined above. 
+We use the lhs (`effect`) and rhs (`cond`) roles to build a new `SourceRole.ConditionalEffect`.
+
+```kotlin
+override fun visitConditionalEffectDeclaration(
+    conditionalEffect: KtConditionalEffectDeclaration<ConeKotlinType, ConeDiagnostic>,
+    data: ContractVisitorContext,
+): ExpEmbedding {
+    val effect = conditionalEffect.effect.accept(this, data)
+    val cond = conditionalEffect.condition.accept(this, data)
+    val role = SourceRole.ConditionalEffect(effect.sourceRole, cond.sourceRole)
+    return Implies(effect, cond, role)
+}
+```
+
+During the error reporting phase, we can build the warning message using both fetched source roles.
 
 ```kotlin
 private fun DiagnosticReporter.reportVerificationErrorUserFriendly(
@@ -247,10 +322,9 @@ private fun DiagnosticReporter.reportVerificationErrorUserFriendly(
     ) {
         when (val role = error.getInfoOrNull<SourceRole>()) {
             // ... - other cases
-            is SourceRole.ConditionalEffect -> with(role) {
-                val lhsRole = error.reason.getLhsRole()
-                val rhsRole = error.reason.getRhsRole()
-                TODO("How do we interpret these roles?")
+            is SourceRole.ConditionalEffect -> {
+                val (effectRole, condRole) = role
+                TODO("How do we interpret the roles from lhs and rhs?")
             }
         }
     }
