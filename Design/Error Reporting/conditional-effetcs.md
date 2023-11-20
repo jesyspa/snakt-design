@@ -235,38 +235,38 @@ This means, that when we explore the lhs of a conditional effect, the created `E
 already. However, this is not always the case for the rhs, that may not have any source role. Thus, we need to 
 add new source roles for the missing rhs:
 
-*   *type predicate* (e.g., `x is T` / `x !is T`): we add new source role `SourceRole.IsTypePredicate`, defined as 
+*   *type predicate* (e.g., `x is T` / `x !is T`): we add new source role `SourceRole.IsTypeCondition`, defined as 
     follows:
 
     ```kotlin
     // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
 
-    data class IsTypePredicate(
+    data class IsTypeCondition(
         val targetVariable: FirBasedSymbol<*>, 
         val expectedType: ConeKotlinType, 
         val negated: Boolean = false // used for '!is' case
     ) : SourceRole
     ```
 
-*   *null predicate* (e.g., `x == null` / `x != null`): we add the new source role `SourceRole.NullPredicate`, defined
+*   *null predicate* (e.g., `x == null` / `x != null`): we add the new source role `SourceRole.IsNullCondition`, defined
     as follows:
 
     ```kotlin
     // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
 
-    data class NullPredicate(
+    data class IsNullCondition(
         val targetVariable: FirBasedSymbol<*>,
         val negated: Boolean = false // used for '!= null' case
     ) : SourceRole
     ```
 
-*   *boolean literals* (e.g., `true` / `false`): we add the new source role `SourceRole.BooleanLiteral`, defined as
+*   *boolean literals* (e.g., `true` / `false`): we add the new source role `SourceRole.BooleanLiteralCondition`, defined as
     follows:
 
     ```kotlin
     // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
 
-    data class BooleanLiteral(val literal: Boolean) : SourceRole
+    data class ConstantCondition(val literal: Boolean) : SourceRole
     ```
 
 *   *compound predicates* (e.g., `A && B`, `A || B`, `!A`): we add the following new source roles:
