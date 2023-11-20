@@ -235,7 +235,7 @@ This means, that when we explore the lhs of a conditional effect, the created `E
 already. However, this is not always the case for the rhs, that may not have any source role. Thus, we need to 
 add new source roles for the missing rhs:
 
-*   *type predicate* (e.g., `x is T` / `x !is T`): we add new source role `SourceRole.IsTypeCondition`, defined as 
+*   *type conditions* (e.g., `x is T` / `x !is T`): we add new source role `SourceRole.IsTypeCondition`, defined as 
     follows:
 
     ```kotlin
@@ -248,7 +248,7 @@ add new source roles for the missing rhs:
     ) : SourceRole
     ```
 
-*   *null predicate* (e.g., `x == null` / `x != null`): we add the new source role `SourceRole.IsNullCondition`, defined
+*   *null/not-null conditions* (e.g., `x == null` / `x != null`): we add the new source role `SourceRole.IsNullCondition`, defined
     as follows:
 
     ```kotlin
@@ -260,7 +260,7 @@ add new source roles for the missing rhs:
     ) : SourceRole
     ```
 
-*   *boolean literals* (e.g., `true` / `false`): we add the new source role `SourceRole.BooleanLiteralCondition`, defined as
+*   *boolean conditions* (e.g., `true` / `false`): we add the new source role `SourceRole.ConstantCondition`, defined as
     follows:
 
     ```kotlin
@@ -269,22 +269,22 @@ add new source roles for the missing rhs:
     data class ConstantCondition(val literal: Boolean) : SourceRole
     ```
 
-*   *compound predicates* (e.g., `A && B`, `A || B`, `!A`): we add the following new source roles:
+*   *compound conditions* (e.g., `A && B`, `A || B`, `!A`): we add the following new source roles:
 
     ```kotlin
     // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
 
-    /* Models && predicate. */
-    data class ConjunctivePredicate(val lhs: SourceRole, val rhs: SourceRole) : SourceRole
+    /* Models && condition. */
+    data class ConjunctiveCondition(val lhs: SourceRole, val rhs: SourceRole) : SourceRole
 
-    /* Models || predicate. */
-    data class DisjunctivePredicate(val lhs: SourceRole, val rhs: SourceRole) : SourceRole 
+    /* Models || condition. */
+    data class DisjunctiveCondition(val lhs: SourceRole, val rhs: SourceRole) : SourceRole 
 
-    /* Models ! predicate. */
-    data class NegationPredicate(val negated: SourceRole) : SourceRole
+    /* Models ! condition. */
+    data class NegationCondition(val negated: SourceRole) : SourceRole
     ```
 
-    These definitions allow inspecting predicates at a deeper level during the error reporting phase.
+    These definitions allow inspecting conditions at a deeper level during the error reporting phase.
 
 Since the function `visitConditionalEffectDeclaration` explores both the left and right-hand sides of the implication, 
 they will contain their respective source roles defined above. 
