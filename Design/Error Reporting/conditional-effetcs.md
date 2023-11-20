@@ -224,11 +224,7 @@ data class Implies(
 // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
 sealed interface SourceRole {
     // ...
-    data class ConditionalEffect(val lhs: SourceRole, val rhs: SourceRole) : SourceRole {
-        // Utility functions to perform value destructuring
-        operator fun component1(): SourceRole = lhs
-        operator fun component2(): SourceRole = rhs
-    }
+    data class ConditionalEffect(val lhs: SourceRole, val rhs: SourceRole) : SourceRole
 }
 ```
 
@@ -279,16 +275,10 @@ add new source roles for the missing rhs:
     // org/jetbrains/kotlin/formver/embeddings/SourceRole.kt
 
     /* Models && predicate. */
-    data class ConjunctivePredicate(val lhs: SourceRole, val rhs: SourceRole) : SourceRole {
-        operator fun component1(): SourceRole = lhs
-        operator fun component2(): SourceRole = rhs
-    }
+    data class ConjunctivePredicate(val lhs: SourceRole, val rhs: SourceRole) : SourceRole
 
     /* Models || predicate. */
-    data class DisjunctivePredicate(val lhs: SourceRole, val rhs: SourceRole) : SourceRole {
-        operator fun component1(): SourceRole = lhs
-        operator fun component2(): SourceRole = rhs
-    }
+    data class DisjunctivePredicate(val lhs: SourceRole, val rhs: SourceRole) : SourceRole 
 
     /* Models ! predicate. */
     data class NegationPredicate(val negated: SourceRole) : SourceRole
