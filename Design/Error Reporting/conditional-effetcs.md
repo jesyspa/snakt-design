@@ -209,12 +209,14 @@ Concrete counter-example:
 
 We start implementing the generic message. The generic message looks like this:
 
->  `{0} implies '{1}' condition, although the latter might not hold.`
+>  `Cannot verify that if {0} then {1}.`
 
 The placeholders are:
+
 * `{0}` can be:
-    * `Returning a 'x' value`, where `x` can be a boolean value, or `null`, `non-null`.
-    * `The returning function`, when the ‘returns’ effect is empty.
+
+    * `a 'x' value is returned` -- where `x` can be a boolean value, or `null`, `non-null`.
+    * `the function returns` -- when the ‘returns’ effect is empty.
 
 * `{1}` is the right-hand side of the implication.
 
@@ -234,7 +236,7 @@ fun notNullWithTypeAssertion2(x: Any?, y: Int): Any? {
 
 In the conditional effect marked with the annotation `CONDITIONAL_EFFECT_ERROR`, we will output:
 
-> `Returning a ‘non-null’ values implies ‘x is Int’ condition, although the latter might not hold.`
+> `Cannot verify that if a ‘non-null’ value is returned then ‘x is Int’.`
 
 ### Example 2
 
@@ -251,7 +253,7 @@ fun emptyReturnsWithTypeAssertion(x: Any?) {
 
 In the conditional effect marked with the annotation `CONDITIONAL_EFFECT_ERROR`, we will output:
 
-> `The returning function implies ‘x is Int’ condition, although the latter might not hold.`
+> `Cannot verify that if the function returns then ‘x is Int’.`
 
 
 ### Code
