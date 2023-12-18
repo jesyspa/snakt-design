@@ -6,6 +6,8 @@ The terminology contained in this document can be found at the following
 
 ## Overview
 
+Problem:
+
 We would like to help Viper verifying the value of class' **read-only properties**.
 
 ```kotlin
@@ -18,14 +20,16 @@ fun testPoint() {
 }
 ```
 
+Goal:
+
 To do so, we need to create new post-conditions on classes constructors
 in the Viper code.
 
 Open questions:
 
-- [x]   What we do with _primary_ constructors?
+- [ ]   What to do with _primary_ constructors?
 
-- [x]   What about _secondary_ constructors?
+- [ ]   What about _secondary_ constructors?
   - [ ] What to do with read-only properties initialized by function calls?
 
 - [ ]   What to do with inheritance?
