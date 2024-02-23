@@ -92,7 +92,23 @@ fun inheritanceOne() {
 
 Generalization: Parent classes defining primary constructors, and
 children classes adding new read-only properties.
+---
 
+Case #3': Inheritance - Override in constructor
+Since Case #3 might be tricky to implement, this case is introduced.
+
+```kotlin
+open class Point2D {
+    val x = 0
+    val y = 0    
+}
+class Point3D(override val x: Int, override val y: Int, val z: Int)
+
+fun inheritanceTwo() {
+    val p = Point3D(5, 5, 5)
+    verify(p.x == 5 && p.y == 5 && p.z == 5)
+}
+```
 ---
 
 Case #4: Init Blocks
