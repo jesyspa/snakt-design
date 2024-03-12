@@ -1,0 +1,139 @@
+// This file provides some ideas on how annotations about uniqueness can be included in classes encoding
+
+// - every reference (unique or not) can access immutable fields (with wildcard permissions)
+// - if the reference is unique, then we can also access mutable unique fields (with full permissions)
+// - if the reference is not unique, then permissions for accessing the fields are inhaled and exhaled
+
+field x: Int
+field y: Int
+field z: Int
+field w: Int
+field r1: Ref
+field r2: Ref
+
+function is_unique(this: Ref): Bool
+ensures this == null ==> result == true
+
+// Predicates for representing classes A and B
+
+predicate readA(this:Ref)
+{
+    acc(this.x, wildcard) &&
+
+    acc(this.r1, wildcard) &&
+    readB(this.r1) &&
+
+    acc(this.r2, wildcard) && 
+    readB(this.r2)
+}
+
+predicate writeA(this: Ref)
+{
+    acc(this.y) &&
+
+    acc(this.r2, wildcard) &&
+    writeB(this.r2)
+}
+
+predicate readB(this: Ref){
+    acc(this.z, wildcard)
+}
+
+predicate writeB(this: Ref){
+    acc(this.w)
+}
+
+// Getters 
+
+function A$get$x(this: Ref): Int
+requires acc(readA(this), wildcard)
+{
+    unfolding acc(readA(this), wildcard) in this.x
+}
+
+function A$get$y(this: Ref): Int
+requires writeA(this)
+{
+    unfolding writeA(this) in this.y
+}
+
+function A$get$r2$w(this: Ref): Int
+requires writeA(this)
+{
+    unfolding writeA(this) in unfolding writeB(this.r2) in this.r2.w
+}
+
+function A$get$r2$z(this: Ref): Int
+requires acc(readA(this), wildcard)
+{
+    unfolding acc(readA(this), wildcard) in unfolding acc(readB(this.r2), wildcard) in this.r2.z
+}
+
+// Setters macros
+
+define A$set$y(this, n)
+{
+    unfold writeA(this)
+    this.y := n
+    fold writeA(this)
+}
+
+define A$set$r2$w(this, n)
+{
+    unfold writeA(this)
+    unfold writeB(this.r2)
+    this.r2.w := n
+    fold writeB(this.r2)
+    fold writeA(this)
+}
+
+// ...
+
+method f(this:Ref)
+requires acc(readA(this), wildcard)
+requires is_unique(this) ==> writeA(this)
+ensures acc(readA(this), wildcard)
+ensures is_unique(this) ==> (
+    writeA(this) &&
+    // behavioural properties
+    A$get$r2$w(this) == A$get$x(old(this)) &&
+    unfolding writeA(this) in unfolding writeB(this.r2) in this.r2.w == this.y
+)
+{
+    var n: Int
+    var anonymous: Int
+
+    // accessing immutable fields
+    n := A$get$x(this)
+
+    // accessing mutable fields
+    if(!is_unique(this)) { inhale writeA(this) }
+    A$set$r2$w(this, n)
+    if(!is_unique(this)) { exhale writeA(this) }
+
+    if(!is_unique(this)) { inhale writeA(this) }
+    anonymous := A$get$r2$w(this)
+    A$set$y(this, anonymous)
+    if(!is_unique(this)) { exhale writeA(this) }
+}
+
+method main()
+{
+    var a: Ref
+    inhale acc(readA(a), wildcard) && writeA(a) && is_unique(a)
+    inhale A$get$x(a) == 1
+    inhale A$get$y(a) == 2
+    inhale A$get$r2$z(a) == 5
+    inhale A$get$r2$w(a) == 6
+
+    var n : Int
+    n := A$get$x(a)
+
+    f(a)
+
+    assert A$get$x(a) == 1
+    assert A$get$y(a) == 1
+    assert A$get$r2$w(a) == 1
+    assert A$get$r2$z(a) == 5
+    exhale acc(readA(a), wildcard) && writeA(a) && is_unique(a)
+}

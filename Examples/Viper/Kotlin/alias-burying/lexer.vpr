@@ -1,0 +1,95 @@
+field file: Ref
+field buf: Ref
+
+function is_unique(this: Ref): Bool
+ensures this == null ==> result == true
+
+predicate File(this: Ref)
+
+// let's assume we use Viper built-in null
+// Everything is mutable here, for the sake of simplicity read predicate are omitted
+
+predicate Buffer(this: Ref){
+    acc(this.file) &&
+    is_unique(this.file) &&
+    (this.file != null ==> File(this.file))
+}
+
+predicate Lexer(this: Ref){
+    acc(this.buf) && Buffer(this.buf) &&is_unique(this.buf)
+}
+
+method Buffer$atEOF(this: Ref) returns(ret: Bool)
+requires is_unique(this) ==> Buffer(this)
+ensures is_unique(this) ==> Buffer(this)
+
+method Buffer$sync(this: Ref)
+requires is_unique(this) ==> Buffer(this)
+ensures is_unique(this) ==> Buffer(this)
+
+method Buffer$getFile(this: Ref) returns(ret: Ref)
+requires is_unique(this) && Buffer(this)
+ensures Buffer(this)
+ensures is_unique(ret) 
+ensures (ret != null) ==> File(ret)
+{
+    var temp: Ref
+
+    unfold Buffer(this)
+    temp := this.file
+    fold Buffer(this)
+
+    unfold Buffer(this)
+    // inhaling is_unique is not necessary since null is always unique
+    this.file := null
+    fold Buffer(this)
+
+    ret := temp
+}
+
+method Lexer$isDone(this: Ref) returns (ret: Bool)
+requires is_unique(this) ==> Lexer(this)
+ensures is_unique(this) ==> Lexer(this)
+{
+    if (!is_unique(this)) { inhale Lexer(this) }
+
+    unfold Lexer(this)
+    ret := Buffer$atEOF(this.buf)
+    fold Lexer(this)
+
+    if (!is_unique(this)) { exhale Lexer(this) }
+}
+
+method Lexer$replace(this: Ref, _file: Ref) returns (ret: Ref)
+requires is_unique(this) ==> Lexer(this)
+requires is_unique(_file)
+ensures is_unique(this) ==> Lexer(this)
+ensures is_unique(ret)
+ensures (ret != null) ==> File(ret)
+{
+    var _old: Ref
+    var temp: Ref
+
+    if (!is_unique(this)) { inhale Lexer(this) }
+    unfold Lexer(this)
+    Buffer$sync(this.buf)
+    fold Lexer(this)
+    if (!is_unique(this)) { exhale Lexer(this) }
+
+    if (!is_unique(this)) { inhale Lexer(this) }
+    unfold Lexer(this)
+    _old := Buffer$getFile(this.buf)
+    fold Lexer(this)
+    if (!is_unique(this)) { exhale Lexer(this) }
+
+    // Instead of using these inhaling statements, a constructor method can also be used
+    inhale Buffer(temp)
+    inhale is_unique(temp)
+    if (!is_unique(this)) { inhale Lexer(this) }
+    unfold Lexer(this)
+    this.buf := temp
+    fold Lexer(this)
+    if (!is_unique(this)) { exhale Lexer(this) }
+
+    ret := _old 
+}
