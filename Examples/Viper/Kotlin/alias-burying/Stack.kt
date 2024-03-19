@@ -17,8 +17,8 @@ class Stack(var root: @Unique Node?) {
         if (this.root == null) {
             value = null
         } else {
-            value = this.root!!.value
-            val next = this.root!!.next
+            value = this.root!!.value // here uniqueness should allow a smart cast
+            val next = this.root!!.next // here uniqueness should allow a smart cast
             this.root = next
         }
         return value
