@@ -1,0 +1,69 @@
+field value: Ref
+field next: Ref
+field root: Ref
+
+// In the example, all the fields are mutable. Read predicates are omitted
+
+predicate Any (this: Ref)
+
+predicate Node(this: Ref) {
+    acc(this.value) &&
+    (this.value != null ==> Any(this.value)) &&
+    acc(this.next) &&
+    (this.next != null ==> Node(this.next))
+}
+
+predicate Stack(this: Ref) {
+    acc(this.root) &&
+    (this.root != null ==> Node(this.root))
+}
+
+define Stack$set$root(this, value){
+    unfold Stack(this)
+    this.root := value
+    fold Stack(this)
+}
+
+method Node$constructor(_value: Ref, _next: Ref) returns (res:Ref)
+    requires (_value != null ==> Any(_value))
+    requires (_next != null ==> Node(_next))
+    ensures Node(res)
+    ensures unfolding Node(res) in res.value == _value
+    ensures unfolding Node(res) in res.next == _next
+
+
+method Stack$push(this: Ref, _value: Ref)
+    requires Stack(this)
+    requires _value != null ==> Any(_value)
+    ensures Stack(this)
+    // Since _value is not borrowed, Any(_value) is lost after calling the method
+{
+    var r: Ref
+    var n: Ref
+
+    r := unfolding Stack(this) in this.root
+    Stack$set$root(this, null)
+    n := Node$constructor(_value, r)
+    Stack$set$root(this, n)
+}
+
+method Stack$pop(this: Ref) returns (res: Ref)
+    requires Stack(this)
+    ensures Stack(this)
+    ensures res != null ==> Any(res)
+{
+    var _value: Ref
+    if (unfolding Stack(this) in this.root == null){
+        _value := null
+    } else {
+        _value := unfolding Stack(this) in unfolding Node(this.root) in this.root.value
+        var _next: Ref
+        _next := unfolding Stack(this) in unfolding Node(this.root) in this.root.next
+
+        unfold Stack(this)
+        unfold Node(this.root) // this is an example of why unfold logic design will not be trivial
+        this.root := _next
+        fold Stack(this)
+    }
+    res := _value
+}
