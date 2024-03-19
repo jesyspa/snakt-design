@@ -6,7 +6,7 @@ annotation class Borrowed
 
 class B(val z: Int, var w: Int)
 class A(val x: Int, var y: Int, val r1: B, val r2: @Unique B) {
-    @Borrowed
+    @BorrowedUnique
     fun f() {
         val n: Int = this.x
         this.r2.w = n
@@ -15,7 +15,7 @@ class A(val x: Int, var y: Int, val r1: B, val r2: @Unique B) {
 }
 
 fun main() {
-    val a: @Unique A = A(1, 2, B(3, 4), B(5, 6))
+    val a: @Unique A = A(1, 2, B(3, 4), B(5, 6)) // it should be easy to infer uniqueness here
     println("a.x = ${a.x} | a.r2.w = ${a.r2.w} | a.y = ${a.y}")
     a.f()
     println("a.x = ${a.x} | a.r2.w = ${a.r2.w} | a.y = ${a.y}")

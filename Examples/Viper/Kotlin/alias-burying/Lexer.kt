@@ -4,18 +4,18 @@ class File
 
 class Buffer(private var file: @Unique File?) {
 
-    @Unique
+    @BorrowedUnique
     fun atEOF(): Boolean {
         //...
         return false
     }
 
-    @Borrowed
+    @BorrowedUnique
     fun sync() {
         //...
     }
 
-    @Unique
+    @BorrowedUnique
     fun getFile(): @Unique File? {
         val temp = file
         file = null
@@ -23,14 +23,14 @@ class Buffer(private var file: @Unique File?) {
     }
 }
 
-class Lexer(private var buf: Buffer) {
+class Lexer(private var buf: @Unique Buffer) {
 
-    @Borrowed
+    @BorrowedUnique
     fun isDone(): Boolean {
         return buf.atEOF()
     }
 
-    @Borrowed
+    @BorrowedUnique
     fun replace(file: @Unique File): @Unique File? {
         buf.sync()
         val old = buf.getFile()
