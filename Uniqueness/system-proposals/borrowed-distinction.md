@@ -47,8 +47,8 @@ method f3(a: Ref)
 // if a unique reference is passed, it is necessary to exhale A since the uniqueness is lost
 
 method f4(a: Ref)
-// if a unique reference is passed,
-// it is NOT needed to exhale A since the method grants that no further aliases will be created
+// if a unique reference is passed, it is necessary to exhale and inhale A.
+// In fact the method guarantees that no further aliases will be created, but it can modify its fields 
 ```
 
 ### Return values
