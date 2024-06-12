@@ -2,16 +2,15 @@
 
 Within a method, the following elements are annotated as follows:
 
-- The arguments have to be either `unique` or `shared`, in addiction they can also be `borrowed`.
-- The receiver has to be either `unique` or `shared`, in addiction it can also be `borrowed`.
+- The arguments have to be either `unique` or `shared`, in addition they can also be `borrowed`.
+- The receiver has to be either `unique` or `shared`, in addition it can also be `borrowed`.
 - The return value has to be either `unique` or `shared`.
 
 ## Return
 
-- A method returning a `unique` reference in Kotlin, will ensure access to the `read` and the `write` predicate of the
-  returned reference in Viper
-- A method returning a `shared` reference in Kotlin, will only ensure access to the `read` predicate of the returned
-  reference in Viper
+- All the methods have to ensure access to the immutable predicate of the returned reference.
+- In addition, a method returning a `unique` reference in Kotlin will also ensure access to the mutable predicate of the
+  returned reference.
 
 **Kotlin**
 
@@ -29,17 +28,17 @@ fun return_shared(): T {
 **Viper**
 
 ```
-predicate readT(this: Ref) { ... }
-predicate writeT(this: Ref) { ... }
+predicate T(this: Ref) { ... }
+predicate UniqueT(this: Ref) { ... }
 
 method return_unique()
 returns(ret: Ref)
-ensures acc(readT(ret), wildcard)
-ensures writeT(ret)
+ensures acc(T(ret), wildcard)
+ensures UniqueT(ret)
 
 method return_shared()
 returns(ret: Ref)
-ensures acc(readT(ret), wildcard)
+ensures acc(T(ret), wildcard)
 ```
 
 ## Arguments conditions
@@ -66,23 +65,23 @@ fun arg_shared_b(@Shared @Borrowed t: T) {}
 
 ```
 method arg_unique(t: Ref)
-requires acc(writeT(t))
-requires acc(readT(t), wildcard)
-ensures acc(readT(t), wildcard)
+requires acc(UniqueT(t))
+requires acc(T(t), wildcard)
+ensures acc(T(t), wildcard)
 
 method arg_shared(t: Ref)
-requires acc(readT(t), wildcard)
-ensures acc(readT(t), wildcard)
+requires acc(T(t), wildcard)
+ensures acc(T(t), wildcard)
 
 method arg_unique_b(t: Ref)
-requires acc(writeT(t))
-requires acc(readT(t), wildcard)
-ensures acc(writeT(t))
-ensures acc(readT(t), wildcard)
+requires acc(UniqueT(t))
+requires acc(T(t), wildcard)
+ensures acc(UniqueT(t))
+ensures acc(T(t), wildcard)
 
 method arg_shared_b(t: Ref)
-requires acc(readT(t), wildcard)
-ensures acc(readT(t), wildcard)
+requires acc(T(t), wildcard)
+ensures acc(T(t), wildcard)
 ```
 
 ## Method calls
@@ -90,9 +89,9 @@ ensures acc(readT(t), wildcard)
 Method calls are straightforward in most of the cases, there are only two cases that require particular attention:
 
 - When a `unique` reference is passed to a function expecting a `shared` argument, it is necessary to `exhale`
-  the `write` predicate after the call since uniqueness is lost.
+  the mutable predicate after the call since uniqueness is lost.
 - When a `unique` reference is passed to a function expecting a `shared` and `borrowed` argument, it is necessary
-  to `exhale` and `inhale` the `write` predicate after the call since the function can modify it.
+  to `exhale` and `inhale` the mutable predicate after the call since the function can modify it.
 
 **Kotlin**
 
@@ -114,29 +113,29 @@ fun call_shared(@Unique tu: T, @Shared ts: T) {
 
 ```
 method call_unique(t: Ref)
-requires writeT(t)
-requires acc(readT(t), wildcard)
-ensures acc(readT(t), wildcard)
+requires UniqueT(t)
+requires acc(T(t), wildcard)
+ensures acc(T(t), wildcard)
 {
     arg_unique_b(t)
     arg_unique(t)
 }
 
 method call_shared(tu: Ref, ts: Ref)
-requires writeT(tu)
-requires acc(readT(tu), wildcard)
-requires acc(readT(ts), wildcard)
-ensures acc(readT(tu), wildcard)
-ensures acc(readT(ts), wildcard)
+requires UniqueT(tu)
+requires acc(T(tu), wildcard)
+requires acc(T(ts), wildcard)
+ensures acc(T(tu), wildcard)
+ensures acc(T(ts), wildcard)
 {
     arg_shared_b(tu)
-    exhale writeT(tu)
-    inhale writeT(tu)
+    exhale UniqueT(tu)
+    inhale UniqueT(tu)
     
     arg_shared_b(ts)
 
     arg_shared(tu)
-    exhale writeT(tu)
+    exhale UniqueT(tu)
     
     arg_shared(ts)
 }

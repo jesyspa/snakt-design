@@ -6,6 +6,8 @@ in the [encoding of classes into Viper predicates](../Design/classea-as-predicat
 
 ## Immutable predicates
 
+These predicates provide read access to properties, recognized as immutable due to the Kotlin type system.
+
 ```kt
 class A(val x: Int, var y: Int)
 
@@ -37,18 +39,21 @@ field y: Int
 field a1: Ref
 field a2: Ref
 
-predicate readA(this: Ref){
+predicate A(this: Ref){
     acc(this.x, wildcard)
 }
 
-predicate readB(this: Ref){
-    acc(this.a1, wildcard) && acc(readA(this.a1), wildcard)
+predicate B(this: Ref){
+    acc(this.a1, wildcard) && acc(A(this.a1), wildcard)
 }
 ```
 
 Note that immutable predicates don't care if the properties are `unique` or `shared`.
 
 ## Mutable predicates
+
+These predicates grant access to property that can be safely accessed thanks to the information provided by the
+uniqueness annotation system.
 
 ```kt
 class A(val x: Int, var y: Int)
@@ -101,12 +106,12 @@ field a2: Ref
 field a3: Ref
 field a4: Ref
 
-predicate writeA(this: Ref){
+predicate UniqueA(this: Ref){
     acc(this.y) && acc(this.x, wildcard)
 }
 
-predicate writeB(this: Ref){
-    acc(this.a1, wildcard) && writeA(this.a1) &&
-    acc(this.a2) && writeA(this.a2)
+predicate UniqueB(this: Ref){
+    acc(this.a1, wildcard) && UniqueA(this.a1) &&
+    acc(this.a2) && UniqueA(this.a2)
 }
 ```
