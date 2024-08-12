@@ -2,12 +2,14 @@
 
 - The main problem is to know when to keep a unique-predicate unfolded and when to fold it back.
 - This is less problematic for shared predicates since folding back is not necessary.
+- The Kt-to-Viper encoding should be done only if the program is well-typed according to our annotation system.
 - Thanks to the annotation system, we know that when something is passed to a function expecting a unique argument, it
   must be in std form. This means that all the sup-paths have at least default permissions.
 - The rule of thumb should be: if a reference is unique at some point in the annotation system, at the corresponding
-  point of the Viper encoding its unique-predicate should hold or we should be able to obtain it after applying some
+  point of the Viper encoding its unique-predicate should hold, or we should be able to obtain it after applying some
   fold/unfold.
-- We can keep track of the assertion that holds at a certain point inside a `PredCtx`. The context can contain:
+- We can keep track of the assertion that holds at a certain point inside a `PredCtx`, that is a set of `ExpEmbedding`.
+  The context can contain:
     - `acc(p, write)`
     - `uniqueT(p)`
     - `acc(p, wildcard)`
@@ -29,14 +31,19 @@
     - The `PredCtx` contains `acc(p, write)` or `acc(p, wildcard)` -> nothing to do.
     - If the `PredCtx` contains a predicate that after several unfoldings can provide access to `p`, these unfoldings
       are performed.
-    - otherwise access is inhaled.
-- when a path `p` is passed to a function expecting a unique, we can look at the `PredCtx` to understand what to do.
+    - otherwise access is inhaled. **NOTE**: it is **not** possible to inhale it with `wildcard` permissions since we
+      want to exhale it right after the read (and there is no way to exhale `wildcard` access). The best thing to do is
+      inhaling it with a small fractional permission.
+- When a path `p` is passed to a function expecting a unique, we can look at the `PredCtx` to understand what to do.
   There can be 3 (or 4) cases:
     - The needed predicate is in the `PredCtx` -> nothing to do
     - The `PredCtx` contains the predicate of a sub-path -> we need unfold it
     - The `PredCtx` contains the predicates and access of several sup-paths -> we need to fold them starting from the
       longest sup-paths to the shorter ones.
     - The program is not well-typed -> should be detected before Viper conversion.
+- When a unique reference is passed to a function expecting a shared argument, its unique predicate must be exhaled.
+- When a unique reference is passed to a function expecting a borrowed-shared argument, its unique predicate must be
+  exhaled and then inhaled.
 
 ## Updating the context
 
@@ -49,6 +56,9 @@
       one described in the annotation system is applied.
     - if the `PredCtx` contains the **write** access of any sup-path `q.*` , a substitution similar to the one described
       in the annotation system is applied.
+    - shared-predicate of `q` or any sup-path `q.*` and read access of any sup-path `q.*` can be duplicated.
+    - **Note:** the substitution has to include the predicates and the access removed in the first two points.
+      Otherwise, assignments like `x = x.next` can be problematic.
 - call:
     - The annotation system guarantees that the same unique predicate is not required twice
     - The annotation system guarantees that if a unique-predicate is required, unique-predicates from its sup-paths are
@@ -66,10 +76,7 @@
 ## Additional Viper statements
 
 - Assignments `p = exp`: if the access to `p` has been inhaled, we need to exhale it.
-- When a unique reference is passed to a function expecting a shared argument, its unique predicate must be exhaled
-  after the call.
-- When a unique reference is passed to a function expecting a borrowed-shared argument, its unique predicate must be
-  exhaled and inhaled after the call.
+- Assignments `exp = p`: if the fractional access to `p` has been inhaled, we need to exhale it.
 
 # Problems and TODOs
 
@@ -83,3 +90,6 @@ keep everything as simple as possible.
   super-classes becomes problematic, we can get rid of them by flattening hierarchies.
 - The document doesn't consider nullable references. They can be included by adding a flag to the elements inside
   a `PredCtx`.
+- `if` statements are supported by the annotation system and should also be supported in the encoding.
+- `while` statements are not yet supported by the annotation system. When they will be supported, it will also be
+  necessary to add logic for inferring invariants about predicates.
