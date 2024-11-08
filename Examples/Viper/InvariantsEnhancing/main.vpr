@@ -1,0 +1,633 @@
+domain d$rt  {
+
+  unique function df$rt$intType(): d$rt
+
+  unique function df$rt$boolType(): d$rt
+
+  unique function df$rt$charType(): d$rt
+
+  unique function df$rt$unitType(): d$rt
+
+  unique function df$rt$nothingType(): d$rt
+
+  unique function df$rt$anyType(): d$rt
+
+  unique function df$rt$functionType(): d$rt
+
+  unique function df$rt$stringType(): d$rt
+
+  unique function df$rt$c$pkg$kotlin$Comparable(): d$rt
+
+  unique function df$rt$c$pkg$kotlin$CharSequence(): d$rt
+
+  unique function df$rt$c$pkg$java_io$Serializable(): d$rt
+
+  function df$rt$nullValue(): Ref
+
+  function df$rt$unitValue(): Ref
+
+  function df$rt$isSubtype(t1: d$rt, t2: d$rt): Bool
+
+  function df$rt$typeOf(r: Ref): d$rt
+
+  function df$rt$nullable(t: d$rt): d$rt
+
+  function df$rt$intToRef(v: Int): Ref
+
+  function df$rt$intFromRef(r: Ref): Int
+
+  function df$rt$boolToRef(v: Bool): Ref
+
+  function df$rt$boolFromRef(r: Ref): Bool
+
+  function df$rt$charToRef(v: Int): Ref
+
+  function df$rt$charFromRef(r: Ref): Int
+
+  function df$rt$stringToRef(v: Seq[Int]): Ref
+
+  function df$rt$stringFromRef(r: Ref): Seq[Int]
+
+  axiom rt$subtype_reflexive {
+    (forall t: d$rt ::df$rt$isSubtype(t, t))
+  }
+
+  axiom rt$subtype_transitive {
+    (forall t1: d$rt, t2: d$rt, t3: d$rt ::
+      { df$rt$isSubtype(t1, t2), df$rt$isSubtype(t2, t3) }
+      { df$rt$isSubtype(t1, t2), df$rt$isSubtype(t1, t3) }
+      { df$rt$isSubtype(t2, t3), df$rt$isSubtype(t1, t3) }
+      df$rt$isSubtype(t1, t2) && df$rt$isSubtype(t2, t3) ==>
+      df$rt$isSubtype(t1, t3))
+  }
+
+  axiom rt$subtype_antisymmetric {
+    (forall t1: d$rt, t2: d$rt ::
+      { df$rt$isSubtype(t1, t2), df$rt$isSubtype(t2, t1) }
+      df$rt$isSubtype(t1, t2) && df$rt$isSubtype(t2, t1) ==> t1 == t2)
+  }
+
+  axiom rt$nullable_idempotent {
+    (forall t: d$rt ::
+      { df$rt$nullable(df$rt$nullable(t)) }
+      df$rt$nullable(df$rt$nullable(t)) == df$rt$nullable(t))
+  }
+
+  axiom rt$nullable_supertype {
+    (forall t: d$rt ::
+      { df$rt$nullable(t) }
+      df$rt$isSubtype(t, df$rt$nullable(t)))
+  }
+
+  axiom rt$nullable_preserves_subtype {
+    (forall t1: d$rt, t2: d$rt ::
+      { df$rt$isSubtype(df$rt$nullable(t1), df$rt$nullable(t2)) }
+      df$rt$isSubtype(t1, t2) ==>
+      df$rt$isSubtype(df$rt$nullable(t1), df$rt$nullable(t2)))
+  }
+
+  axiom rt$nullable_any_supertype {
+    (forall t: d$rt ::df$rt$isSubtype(t, df$rt$nullable(df$rt$anyType())))
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$intType(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$boolType(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$charType(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$unitType(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$nothingType(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$anyType(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$functionType(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$stringType(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$c$pkg$kotlin$Comparable(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$c$pkg$kotlin$CharSequence(), df$rt$anyType())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$c$pkg$java_io$Serializable(), df$rt$anyType())
+  }
+
+  axiom rt$supertype_of_nothing {
+    (forall t: d$rt ::df$rt$isSubtype(df$rt$nothingType(), t))
+  }
+
+  axiom rt$any_not_nullable_type_level {
+    (forall t: d$rt ::!df$rt$isSubtype(df$rt$nullable(t), df$rt$anyType()))
+  }
+
+  axiom rt$null_smartcast_value_level {
+    (forall r: Ref, t: d$rt ::
+      { df$rt$isSubtype(df$rt$typeOf(r), df$rt$nullable(t)) }
+      df$rt$isSubtype(df$rt$typeOf(r), df$rt$nullable(t)) ==>
+      r == df$rt$nullValue() || df$rt$isSubtype(df$rt$typeOf(r), t))
+  }
+
+  axiom rt$nothing_empty {
+    (forall r: Ref ::!df$rt$isSubtype(df$rt$typeOf(r), df$rt$nothingType()))
+  }
+
+  axiom rt$null_smartcast_type_level {
+    (forall t1: d$rt, t2: d$rt ::
+      { df$rt$isSubtype(t1, df$rt$anyType()), df$rt$isSubtype(t1, df$rt$nullable(t2)) }
+      df$rt$isSubtype(t1, df$rt$anyType()) &&
+      df$rt$isSubtype(t1, df$rt$nullable(t2)) ==>
+      df$rt$isSubtype(t1, t2))
+  }
+
+  axiom rt$type_of_null {
+    df$rt$isSubtype(df$rt$typeOf(df$rt$nullValue()), df$rt$nullable(df$rt$nothingType()))
+  }
+
+  axiom rt$any_not_nullable_value_level {
+    !df$rt$isSubtype(df$rt$typeOf(df$rt$nullValue()), df$rt$anyType())
+  }
+
+  axiom rt$type_of_unit {
+    df$rt$isSubtype(df$rt$typeOf(df$rt$unitValue()), df$rt$unitType())
+  }
+
+  axiom rt$uniqueness_of_unit {
+    (forall r: Ref ::
+      { df$rt$isSubtype(df$rt$typeOf(r), df$rt$unitType()) }
+      df$rt$isSubtype(df$rt$typeOf(r), df$rt$unitType()) ==>
+      r == df$rt$unitValue())
+  }
+
+  axiom {
+    (forall v: Int ::
+      { df$rt$isSubtype(df$rt$typeOf(df$rt$intToRef(v)), df$rt$intType()) }
+      df$rt$isSubtype(df$rt$typeOf(df$rt$intToRef(v)), df$rt$intType()))
+  }
+
+  axiom {
+    (forall v: Int ::
+      { df$rt$intFromRef(df$rt$intToRef(v)) }
+      df$rt$intFromRef(df$rt$intToRef(v)) == v)
+  }
+
+  axiom {
+    (forall r: Ref ::
+      { df$rt$intToRef(df$rt$intFromRef(r)) }
+      df$rt$isSubtype(df$rt$typeOf(r), df$rt$intType()) ==>
+      df$rt$intToRef(df$rt$intFromRef(r)) == r)
+  }
+
+  axiom {
+    (forall v: Bool ::
+      { df$rt$isSubtype(df$rt$typeOf(df$rt$boolToRef(v)), df$rt$boolType()) }
+      df$rt$isSubtype(df$rt$typeOf(df$rt$boolToRef(v)), df$rt$boolType()))
+  }
+
+  axiom {
+    (forall v: Bool ::
+      { df$rt$boolFromRef(df$rt$boolToRef(v)) }
+      df$rt$boolFromRef(df$rt$boolToRef(v)) == v)
+  }
+
+  axiom {
+    (forall r: Ref ::
+      { df$rt$boolToRef(df$rt$boolFromRef(r)) }
+      df$rt$isSubtype(df$rt$typeOf(r), df$rt$boolType()) ==>
+      df$rt$boolToRef(df$rt$boolFromRef(r)) == r)
+  }
+
+  axiom {
+    (forall v: Int ::
+      { df$rt$isSubtype(df$rt$typeOf(df$rt$charToRef(v)), df$rt$charType()) }
+      df$rt$isSubtype(df$rt$typeOf(df$rt$charToRef(v)), df$rt$charType()))
+  }
+
+  axiom {
+    (forall v: Int ::
+      { df$rt$charFromRef(df$rt$charToRef(v)) }
+      df$rt$charFromRef(df$rt$charToRef(v)) == v)
+  }
+
+  axiom {
+    (forall r: Ref ::
+      { df$rt$charToRef(df$rt$charFromRef(r)) }
+      df$rt$isSubtype(df$rt$typeOf(r), df$rt$charType()) ==>
+      df$rt$charToRef(df$rt$charFromRef(r)) == r)
+  }
+
+  axiom {
+    (forall v: Seq[Int] ::
+      { df$rt$isSubtype(df$rt$typeOf(df$rt$stringToRef(v)), df$rt$stringType()) }
+      df$rt$isSubtype(df$rt$typeOf(df$rt$stringToRef(v)), df$rt$stringType()))
+  }
+
+  axiom {
+    (forall v: Seq[Int] ::
+      { df$rt$stringFromRef(df$rt$stringToRef(v)) }
+      df$rt$stringFromRef(df$rt$stringToRef(v)) == v)
+  }
+
+  axiom {
+    (forall r: Ref ::
+      { df$rt$stringToRef(df$rt$stringFromRef(r)) }
+      df$rt$isSubtype(df$rt$typeOf(r), df$rt$stringType()) ==>
+      df$rt$stringToRef(df$rt$stringFromRef(r)) == r)
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$stringType(), df$rt$c$pkg$kotlin$Comparable())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$stringType(), df$rt$c$pkg$kotlin$CharSequence())
+  }
+
+  axiom {
+    df$rt$isSubtype(df$rt$stringType(), df$rt$c$pkg$java_io$Serializable())
+  }
+}
+
+field bf$length: Ref
+
+function sp$addCharInt(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$charType())
+  ensures df$rt$charFromRef(result) ==
+    df$rt$charFromRef(arg1) + df$rt$intFromRef(arg2)
+
+
+function sp$addStrings(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$stringType())
+  ensures df$rt$stringFromRef(result) ==
+    df$rt$stringFromRef(arg1) ++ df$rt$stringFromRef(arg2)
+
+
+function sp$andBools(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    (df$rt$boolFromRef(arg1) && df$rt$boolFromRef(arg2))
+
+
+function sp$divInts(arg1: Ref, arg2: Ref): Ref
+  requires df$rt$intFromRef(arg2) != 0
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$intType())
+  ensures df$rt$intFromRef(result) ==
+    df$rt$intFromRef(arg1) / df$rt$intFromRef(arg2)
+
+
+function sp$geChars(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    df$rt$charFromRef(arg1) >= df$rt$charFromRef(arg2)
+
+
+function sp$geInts(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    df$rt$intFromRef(arg1) >= df$rt$intFromRef(arg2)
+
+
+function sp$gtChars(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    df$rt$charFromRef(arg1) > df$rt$charFromRef(arg2)
+
+
+function sp$gtInts(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    df$rt$intFromRef(arg1) > df$rt$intFromRef(arg2)
+
+
+function sp$impliesBools(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    (df$rt$boolFromRef(arg1) ==> df$rt$boolFromRef(arg2))
+
+
+function sp$leChars(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    df$rt$charFromRef(arg1) <= df$rt$charFromRef(arg2)
+
+
+function sp$leInts(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    df$rt$intFromRef(arg1) <= df$rt$intFromRef(arg2)
+
+
+function sp$ltChars(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    df$rt$charFromRef(arg1) < df$rt$charFromRef(arg2)
+
+
+function sp$ltInts(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    df$rt$intFromRef(arg1) < df$rt$intFromRef(arg2)
+
+
+function sp$minusInts(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$intType())
+  ensures df$rt$intFromRef(result) ==
+    df$rt$intFromRef(arg1) - df$rt$intFromRef(arg2)
+
+
+function sp$notBool(arg1: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) == !df$rt$boolFromRef(arg1)
+
+
+function sp$orBools(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$boolType())
+  ensures df$rt$boolFromRef(result) ==
+    (df$rt$boolFromRef(arg1) || df$rt$boolFromRef(arg2))
+
+
+function sp$plusInts(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$intType())
+  ensures df$rt$intFromRef(result) ==
+    df$rt$intFromRef(arg1) + df$rt$intFromRef(arg2)
+
+
+function sp$remInts(arg1: Ref, arg2: Ref): Ref
+  requires df$rt$intFromRef(arg2) != 0
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$intType())
+  ensures df$rt$intFromRef(result) ==
+    df$rt$intFromRef(arg1) % df$rt$intFromRef(arg2)
+
+
+function sp$stringGet(arg1: Ref, arg2: Ref): Ref
+  requires df$rt$intFromRef(arg2) >= 0 &&
+    df$rt$intFromRef(arg2) < |df$rt$stringFromRef(arg1)|
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$charType())
+  ensures df$rt$charFromRef(result) ==
+    df$rt$stringFromRef(arg1)[df$rt$intFromRef(arg2)]
+
+
+function sp$stringLength(arg1: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$intType())
+  ensures df$rt$intFromRef(result) == |df$rt$stringFromRef(arg1)|
+
+
+function sp$subCharInt(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$charType())
+  ensures df$rt$charFromRef(result) ==
+    df$rt$charFromRef(arg1) - df$rt$intFromRef(arg2)
+
+
+function sp$subChars(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$intType())
+  ensures df$rt$intFromRef(result) ==
+    df$rt$charFromRef(arg1) - df$rt$charFromRef(arg2)
+
+
+function sp$timesInts(arg1: Ref, arg2: Ref): Ref
+  ensures df$rt$isSubtype(df$rt$typeOf(result), df$rt$intType())
+  ensures df$rt$intFromRef(result) ==
+    df$rt$intFromRef(arg1) * df$rt$intFromRef(arg2)
+
+
+predicate p$pkg$java_io$c$Serializable$shared(this$dispatch: Ref) {
+  true
+}
+
+predicate p$pkg$java_io$c$Serializable$unique(this$dispatch: Ref) {
+  true
+}
+
+predicate p$pkg$kotlin$c$CharSequence$shared(this$dispatch: Ref) {
+  true
+}
+
+predicate p$pkg$kotlin$c$CharSequence$unique(this$dispatch: Ref) {
+  true
+}
+
+predicate p$pkg$kotlin$c$Comparable$shared(this$dispatch: Ref) {
+  true
+}
+
+predicate p$pkg$kotlin$c$Comparable$unique(this$dispatch: Ref) {
+  true
+}
+
+predicate p$pkg$kotlin$c$String$shared(this$dispatch: Ref) {
+  acc(this$dispatch.bf$length, wildcard) &&
+  df$rt$isSubtype(df$rt$typeOf(this$dispatch.bf$length), df$rt$intType()) &&
+  acc(p$pkg$kotlin$c$Comparable$shared(this$dispatch), wildcard) &&
+  acc(p$pkg$kotlin$c$CharSequence$shared(this$dispatch), wildcard) &&
+  acc(p$pkg$java_io$c$Serializable$shared(this$dispatch), wildcard) &&
+  df$rt$intFromRef(this$dispatch.bf$length) ==
+  |df$rt$stringFromRef(this$dispatch)|
+}
+
+predicate p$pkg$kotlin$c$String$unique(this$dispatch: Ref) {
+  acc(this$dispatch.bf$length, wildcard) &&
+  df$rt$isSubtype(df$rt$typeOf(this$dispatch.bf$length), df$rt$intType()) &&
+  acc(p$pkg$kotlin$c$Comparable$unique(this$dispatch), write) &&
+  acc(p$pkg$kotlin$c$CharSequence$unique(this$dispatch), write) &&
+  acc(p$pkg$java_io$c$Serializable$unique(this$dispatch), write)
+}
+
+define toInt(x) df$rt$intFromRef(x)
+define toString(x) df$rt$stringFromRef(x)
+define toBool(x) df$rt$boolFromRef(x)
+define stringAcc(x) acc(p$pkg$kotlin$c$String$shared(x), wildcard)
+define len(x) toInt(unfolding stringAcc(x) in x.bf$length)
+
+method f$isSorted$TF$T$String(this$extension: Ref) returns (ret$0: Ref)
+  ensures df$rt$isSubtype(df$rt$typeOf(ret$0), df$rt$boolType())
+  ensures df$rt$isSubtype(df$rt$typeOf(this$extension), df$rt$stringType())
+  ensures stringAcc(this$extension)
+  ensures toBool(ret$0) ==> (forall i: Int, j: Int ::  (0 < i < len(this$extension) && 0 <= j < i) ==>
+        (toString(this$extension)[j] <= toString(this$extension)[i]))
+{
+  var l0$idx: Ref
+  var anon$0: Ref
+  var anon$1: Ref
+  inhale df$rt$isSubtype(df$rt$typeOf(this$extension), df$rt$stringType())
+  inhale acc(p$pkg$kotlin$c$String$shared(this$extension), wildcard)
+  l0$idx := df$rt$intToRef(1)
+  label lbl$continue$0
+  unfold acc(p$pkg$kotlin$c$String$shared(this$extension), wildcard)
+  anon$1 := this$extension.bf$length
+  anon$0 := sp$ltInts(l0$idx, anon$1)
+  var broken: Bool
+  broken := false
+  while (df$rt$boolFromRef(anon$0) && !broken)
+    invariant stringAcc(this$extension)
+    invariant toBool(anon$0) ==> 0 < toInt(l0$idx) < len(this$extension)
+    invariant old(this$extension) == this$extension
+    invariant !broken ==> (forall i: Int, j: Int :: (0 < i < toInt(l0$idx) && 0 < i < len(this$extension) && 0 <= j < i) ==>
+        (toString(this$extension)[j] <= toString(this$extension)[i]))
+    invariant !toBool(anon$0) ==> toInt(l0$idx) >= len(this$extension)
+  {
+    var anon$2: Ref
+    if (df$rt$stringFromRef(this$extension)[df$rt$intFromRef(l0$idx) - 1] >
+    df$rt$stringFromRef(this$extension)[df$rt$intFromRef(l0$idx)]) {
+      broken := true
+      goto lbl_continue
+    }
+    l0$idx := sp$plusInts(l0$idx, df$rt$intToRef(1))
+    unfold acc(p$pkg$kotlin$c$String$shared(this$extension), wildcard)
+    anon$2 := this$extension.bf$length
+    anon$0 := sp$ltInts(l0$idx, anon$2)
+    label lbl_continue
+  }
+
+  ret$0 := df$rt$boolToRef(!broken)
+  goto lbl$ret$0
+  label lbl$ret$0
+}
+
+method f$lessThan$TF$T$String$T$String(this$extension: Ref, p$other: Ref)
+  returns (ret$0: Ref)
+  ensures df$rt$isSubtype(df$rt$typeOf(ret$0), df$rt$boolType())
+{
+  var l0$idx: Ref
+  var anon$0: Ref
+  var anon$1: Ref
+  var anon$5: Ref
+  var anon$6: Ref
+  inhale df$rt$isSubtype(df$rt$typeOf(this$extension), df$rt$stringType())
+  inhale acc(p$pkg$kotlin$c$String$shared(this$extension), wildcard)
+  inhale df$rt$isSubtype(df$rt$typeOf(p$other), df$rt$stringType())
+  inhale acc(p$pkg$kotlin$c$String$shared(p$other), wildcard)
+  l0$idx := df$rt$intToRef(0)
+  label lbl$continue$0
+  unfold acc(p$pkg$kotlin$c$String$shared(this$extension), wildcard)
+  anon$1 := this$extension.bf$length
+  if (df$rt$intFromRef(l0$idx) < df$rt$intFromRef(anon$1)) {
+    var anon$2: Ref
+    unfold acc(p$pkg$kotlin$c$String$shared(p$other), wildcard)
+    anon$2 := p$other.bf$length
+    anon$0 := sp$ltInts(l0$idx, anon$2)
+  } else {
+    anon$0 := df$rt$boolToRef(false)}
+
+  while (df$rt$boolFromRef(anon$0))
+    invariant stringAcc(this$extension)
+    invariant stringAcc(p$other)
+    invariant toBool(anon$0) ==> (0 <= toInt(l0$idx) < len(p$other) && 0 <= toInt(l0$idx) < len(this$extension))
+  {
+    var anon$3: Ref
+    if (df$rt$stringFromRef(this$extension)[df$rt$intFromRef(l0$idx)] <
+    df$rt$stringFromRef(p$other)[df$rt$intFromRef(l0$idx)]) {
+      ret$0 := df$rt$boolToRef(true)
+      goto lbl$ret$0
+    }
+    l0$idx := sp$plusInts(l0$idx, df$rt$intToRef(1))
+    unfold acc(p$pkg$kotlin$c$String$shared(this$extension), wildcard)
+    anon$3 := this$extension.bf$length
+    if (df$rt$intFromRef(l0$idx) < df$rt$intFromRef(anon$3)) {
+      var anon$4: Ref
+      unfold acc(p$pkg$kotlin$c$String$shared(p$other), wildcard)
+      anon$4 := p$other.bf$length
+      anon$0 := sp$ltInts(l0$idx, anon$4)
+    } else {
+      anon$0 := df$rt$boolToRef(false)}
+  }
+  label lbl$break$0
+  unfold acc(p$pkg$kotlin$c$String$shared(this$extension), wildcard)
+  anon$5 := this$extension.bf$length
+  unfold acc(p$pkg$kotlin$c$String$shared(p$other), wildcard)
+  anon$6 := p$other.bf$length
+  ret$0 := sp$ltInts(anon$5, anon$6)
+  goto lbl$ret$0
+  label lbl$ret$0
+}
+
+method f$isSubstringOnGivenPos$TF$T$String$T$Int$T$String(this$extension: Ref,
+  p$idx: Ref, p$other: Ref)
+  returns (ret$0: Ref)
+  ensures df$rt$isSubtype(df$rt$typeOf(ret$0), df$rt$boolType())
+  ensures stringAcc(p$other) && stringAcc(this$extension)
+  ensures toBool(ret$0) ==> 0 <= toInt(p$idx) <= len(this$extension) - len(p$other) 
+        && (forall i: Int :: (0 <= i < len(p$other)) ==> (toString(this$extension)[i + toInt(p$idx)] == toString(p$other)[i]))
+{
+  var l0$checkIdx: Ref
+  var anon$0: Ref
+  var anon$1: Ref
+  var anon$2: Ref
+  var anon$3: Ref
+  inhale df$rt$isSubtype(df$rt$typeOf(this$extension), df$rt$stringType())
+  inhale acc(p$pkg$kotlin$c$String$shared(this$extension), wildcard)
+  inhale df$rt$isSubtype(df$rt$typeOf(p$idx), df$rt$intType())
+  inhale df$rt$isSubtype(df$rt$typeOf(p$other), df$rt$stringType())
+  inhale acc(p$pkg$kotlin$c$String$shared(p$other), wildcard)
+  l0$checkIdx := df$rt$intToRef(0)
+  unfold acc(p$pkg$kotlin$c$String$shared(p$other), wildcard)
+  anon$0 := p$other.bf$length
+  unfold acc(p$pkg$kotlin$c$String$shared(this$extension), wildcard)
+  anon$1 := this$extension.bf$length
+  if (df$rt$intFromRef(p$idx) + df$rt$intFromRef(anon$0) >
+  df$rt$intFromRef(anon$1)) {
+    ret$0 := df$rt$boolToRef(false)
+    goto lbl$ret$0
+  }
+  if (df$rt$intFromRef(p$idx) < 0) {
+      ret$0 := df$rt$boolToRef(false)
+      goto lbl$ret$0
+  }
+  label lbl$continue$0
+  unfold acc(p$pkg$kotlin$c$String$shared(p$other), wildcard)
+  anon$3 := p$other.bf$length
+  anon$2 := sp$ltInts(l0$checkIdx, anon$3)
+  var broken : Bool
+  broken := false
+  while (df$rt$boolFromRef(anon$2) && !broken)
+    invariant stringAcc(this$extension)
+    invariant stringAcc(p$other)
+    invariant this$extension == old(this$extension)
+    invariant p$other == old(p$other)
+    invariant p$idx == old(p$idx)
+    invariant toBool(anon$2) ==> (0 <= toInt(l0$checkIdx) < len(p$other) && toInt(p$idx) <= toInt(p$idx) + toInt(l0$checkIdx) < len(this$extension))
+    invariant !toBool(anon$2) ==> toInt(l0$checkIdx) == len(p$other)
+    invariant !broken ==> (forall i: Int :: (0 <= i < toInt(l0$checkIdx)) ==>
+        (toString(this$extension)[i + toInt(p$idx)] == toString(p$other)[i]))
+  {
+    var anon$4: Ref
+    if (!(df$rt$stringFromRef(this$extension)[df$rt$intFromRef(p$idx) +
+    df$rt$intFromRef(l0$checkIdx)] ==
+    df$rt$stringFromRef(p$other)[df$rt$intFromRef(l0$checkIdx)])) {
+      broken := true
+      goto lbl_continue
+    }
+    l0$checkIdx := sp$plusInts(l0$checkIdx, df$rt$intToRef(1))
+    unfold acc(p$pkg$kotlin$c$String$shared(p$other), wildcard)
+    anon$4 := p$other.bf$length
+    anon$2 := sp$ltInts(l0$checkIdx, anon$4)
+    label lbl_continue
+  }
+  label lbl$break$0
+  ret$0 := df$rt$boolToRef(!broken)
+  goto lbl$ret$0
+  label lbl$ret$0
+}
+
+method pg$public$length(this$dispatch: Ref) returns (ret: Ref)
+
