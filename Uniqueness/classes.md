@@ -2,7 +2,7 @@
 
 This document describes how uniqueness annotations on classes
 described [here](https://github.com/francescoo22/kt-uniqueness-system/blob/main/Kt-Uniqueness-System.pdf) are reflected
-in the [encoding of classes into Viper predicates](../Design/classea-as-predicates.md).
+in the [encoding of classes into Viper predicates](../Design/classes-as-predicates.md).
 
 ## Immutable predicates
 

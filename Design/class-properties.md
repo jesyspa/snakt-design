@@ -1,9 +1,3 @@
-This document describes designs notes regarding the issue
-[KOTLIN-FORMVER-T-101](https://jetbrains.team/p/kotlin-formver/issues/101).
-
-The terminology contained in this document can be found at the following
-[link](https://kotlinlang.org/spec/kotlin-spec.html#class-declaration).
-
 ## Overview
 
 Problem:
@@ -36,6 +30,9 @@ Open questions:
 
 - [ ]   How `init` blocks can be represented in Viper and generate new
         post-conditions accordingly?
+
+The terminology contained in this document is based on the
+[Kotlin specification](https://kotlinlang.org/spec/kotlin-spec.html#class-declaration).
 
 ## Examples / Test Cases
 

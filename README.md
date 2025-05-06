@@ -1,31 +1,22 @@
-# kotlin-formver/kotlin-ver-experiments
+# SnaKt Design Docs
 
+This is a collection of design documents made during the
+SnaKt project.  Many of these are from the early days, and
+do not represent the project in its current state.
 
+A more structured description is included in Francesco
+Protopapa's master thesis [Verifying Kotlin Code with Viper
+by Controlling Aliasing][1].
 
-## Getting Started
+## Main repository
 
-Download links:
+The actual code is in the [jesyspa/Kotlin repository on
+GitHub][0].
 
-SSH clone URL: ssh://git@git.jetbrains.team/kotlin-formver/kotlin-ver-experiments.git
+## Contact
 
-HTTPS clone URL: https://git.jetbrains.team/kotlin-formver/kotlin-ver-experiments.git
+The main point of contact for the project is Komi Golov
+(komi.golov@jetbrains.com).
 
-
-
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
-
-## Prerequisites
-
-What things you need to install the software and how to install them.
-
-```
-Examples
-```
-
-## Deployment
-
-Add additional notes about how to deploy this on a production system.
-
-## Resources
-
-Add links to external resources for this project, such as CI server, bug tracker, etc.
+[0]: https://github.com/jesyspa/kotlin/
+[1]: https://thesis.unipd.it/handle/20.500.12608/70919
