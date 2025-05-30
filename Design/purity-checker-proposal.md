@@ -1,33 +1,59 @@
-## !First Concept! for the Purity Checker
+## Concept for the Purity Checker
 
-We want a call of `checkValidity()` on an arbitrary `ExpEmbedding` node to return `true` if all `assert` statements present contain only pure expressions, and `false` as soon as one of them is impure. We split the logic into traversal and validation, currently only focussing on the validation of expressions appearing inside of `assert` nodes.
+We want to introduce a notion of validity to our `ExpEmbedding` nodes.
+The first violation of validity would be the existence of an impure `assert` statement.
+ 
 
-Every `ExpEmbedding` implements a new `children` property and the functions `checkValidity` and `checkOwnValidity`.
+Every `ExpEmbedding` implements a new `children` property (`:Sequence<ExpEmbedding>`) and the function `checkOwnValidity`. 
+Example below
 
-The default for `children` is an empty immutable list (`emptyList()`); when overridden it must still be an immutable list referencing the children’s subsequent embeddings.
-
-| **Embedding** | **children** |
-| --- | --- |
-| Assert | `exp` |
-| Block | `exps[]` |
-| Assign | `lhs`, `rhs` |
-| DirectResult | `subexpressions` |
-| Passthrough | `inner` |
-| If | `condition`, `thenBranch`, `elseBranch` |
-| While | `condition`, `body` |
-| MethodCall | `args` |
+| **Embedding** | **children**                            |
+| ------------- | --------------------------------------- |
+| Assert        | `exp`                                   |
+| Block         | `exps[]`                                |
+| Assign        | `lhs`, `rhs`                            |
+| DirectResult  | `subexpressions`                        |
+| Passthrough   | `inner`                                 |
+| If            | `condition`, `thenBranch`, `elseBranch` |
+| While         | `condition`, `body`                     |
+| MethodCall    | `args`                                  |
 
 ---
 
-### checkValidity
+### Preorder
+
+We define an extension function `ExpEmbedding.preorder()` that traverses the `ExpEmbedding` tree and returns an iterable sequence of the nodes in preorder.
 
 ```kotlin
-fun checkValidity(): Boolean =
-    children().all { it.checkValidity() } && checkOwnValidity()
+fun ExpEmbedding.preorder(): Sequence<ExpEmbedding> = sequence {
+    val stack = ArrayDeque<Iterator<ExpEmbedding>>()
+    stack.addFirst(sequenceOf(this@preorder).iterator())
 
+    while (stack.isNotEmpty()) {
+        val it = stack.first()
+        if (it.hasNext()) {
+            val node = it.next()
+            yield(node)
+
+            val childIter = node.children().iterator()
+            if (childIter.hasNext()) stack.addFirst(childIter)
+        } else {
+            stack.removeFirst()
+        }
+    }
+}
 ```
 
-`checkValidity` is responsible only for traversing; the above is the default implementation every `ExpEmbedding` node inherits.
+### checkValidity
+
+To check the validity of the graph, we obtain it using the `preorder` function. We filter all embeddings for which we want to check validity and call `checkOwnValidity` on them.
+
+```kotlin
+fun ExpEmbedding.checkValidity(): Boolean =
+    preorder()
+        .filterIsInstance<Assert>()
+        .all { it.checkOwnValidity() }
+```
 
 ---
 
@@ -35,69 +61,35 @@ fun checkValidity(): Boolean =
 
 ```kotlin
 interface ExpEmbedding {
-    fun children(): List<ExpEmbedding> = emptyList()
+    // ...
+    
+    fun children(): Sequence<ExpEmbedding> = emptySequence()
+    
     fun checkOwnValidity(): Boolean = true
 }
-
 ```
+We want to be able to ask a node to self-validate. We do this via a `checkOwnValidity` call.
+The default local rule simply returns `true`. (For any `ExpEmbedding` other than `Assert`, there is currently nothing that can violate validity.)
 
-The default local rule just returns `true`.
 
----
 
-### Only validating `Assert`
+#### Self-validation of `Assert`
+
+For an `Assert` node, validity is violated if the expression inside is impure. We pass the expression inside the `assert` to a special visitor.
 
 ```kotlin
 data class Assert(val exp: ExpEmbedding) : ExpEmbedding {
+    // ...
 
-    override fun children(): List<ExpEmbedding> = listOf(exp)
+    override fun children(): Sequence<ExpEmbedding> = sequenceOf(exp)
 
-    override fun checkValidity(): Boolean =
-        checkOwnValidity()                       // stop traversal here
-
-    override fun checkOwnValidity(): Boolean =
-        PurityRules.isExpressionValid(exp)
+    override fun checkOwnValidity(): Boolean = 
+        exp.accept(ExprPurityVisitor)
 }
-
-```
-
-An `Assert` node ends the traversal and validates only itself.
+``` 
 
 ---
 
-### PurityRules
+### Functionality of `ExprPurityVisitor`
 
-`assert` can only contain embeddings evaluating to a boolean, so for the validation we can restrict ourselves to:
-
-```kotlin
-private val pureSpecialFunctions: Set<MangledName>; //place the pure Subset of the FullySpecialKotlinFunctions here
-
-object PurityRules {
-    fun isExpressionValid(e: ExpEmbedding): Boolean = when (e) {
-        // covers literals and variables
-        is PureExpEmbedding -> true
-        // for now no other methods, Pure annotation follows after this has merged
-        is MethodCall -> {
-            val calleePure = e.method.name in pureSpecialFunctions
-            calleePure && e.args.all(::isExpressionValid)
-        }
-        
-        // always forbidden inside verify(...)
-        is Assert,
-        is Assign,
-        is FieldModification        -> false
-
-        else -> e.children().all(::isExpressionValid)   // covers DirectResult, etc.
-    }
-}
-
-```
-
-By splitting traversal and validation like this, adapting to future changes (e.g., pure-method annotations) should be simpler than with the previous purity-checker class. I opted to implement `children` for all nodes so that individual `checkValidity` overrides are rarely needed, and because the whole mechanism is stateless we can simply call `checkValidity` on the root of the tree.
-
-### Side Notes
-
-I am assuming that I don’t need to check whether asserts only contain BooleanTypeEmbeddings, because it already throws errors, when something doesn’t evaluate to a boolean and we check purity, not correctness
-It might not work for strings right now. I also haven’t found out how to check which operation is used inside an assert (≤,<, ==) but I honestly think, that that wouldn’t be necessary since we don’t check the type anyway.
-
-This would be the first idea.
+The `ExprPurityVisitor` is responsible for traversing `Assert` expressions and verifying their purity. It should reject any construct that either cannot appear inside an `assert` or is impure (currently `return false`). At the same time, it should accept expressions that are pure in the base cases (`return true`) and recursively traverse the expression tree down to its leaves where necessary.
