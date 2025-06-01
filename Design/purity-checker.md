@@ -1,4 +1,4 @@
-## Concept for the Purity Checker
+## Purity Checker
 
 We want to introduce a notion of validity to our `ExpEmbedding` nodes.
 The first violation of validity would be the existence of an impure `assert` statement.
