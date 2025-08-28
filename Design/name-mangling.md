@@ -94,16 +94,16 @@ and $\text{version} \in \{\text{short}, \text{medium}, \text{long}\}$
 Add an edge $(x, v_x) \to (y, v_y)$ if representing
 $(x, v_x)$ requires knowing the representation of $(y, v_y)$.
 To check this, we simply analyze the specific cases.
-4. Obtain a topological sort of the dependency graph (given the
+3. Obtain a topological sort of the dependency graph (given the
 nature of dependencies on mangled name components, this graph
 should be acyclic).
-5. Traverse the dependency graph in the topological order.
+4. Traverse the dependency graph in the topological order.
 Upon entering a vertex, compute $s(n, v)$ (with no cycles
 in the dependency graph, there should be sufficient information for this).
 Attempt to replace the current version (for `n.basename`) with $v$.
-If there are no conflicts in the graph and $v$ is a more
+If there are no conflicts with already assigned names and $v$ is a more
 beneficial version, make the change.
-6. When resolving a name, examine its `basename` and output the representation
+5. When resolving a name, examine its `basename` and output the representation
 based on its assigned version.
 
 ### Annotated example
