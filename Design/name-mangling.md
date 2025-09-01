@@ -1,15 +1,17 @@
 # Name Mangling
 
-When converting FIR to Viper, we need to ensure that names
-do not conflict.  However, we would prefer short names over
-long names.  By registering all names used in the program
-and attempting to find cases when they can be shortened
-without collisions, we can make the generated code much more
-readable.
+When converting FIR to Viper, we need to ensure that **Viper names** 
+(string representations)
+do not conflict. However, we would prefer short names over
+long names.  By registering all **mangled names** (the symbolic 
+form before being assigned a Viper-compatible string) used 
+in the program and attempting to shorten their corresponding 
+**Viper names** whenever possible without collisions, we make 
+the generated code much more readable.
 
 Goals:
-* Names are globally unique.
-* Names are generally short enough to read at a glance.
+* Viper names are globally unique.
+* Viper names are generally short enough to read at a glance.
 
 Non-goals:
 * Optimising often-used names to be shorter.
@@ -17,25 +19,34 @@ Non-goals:
 Constraints:
 * The dependency graph must be acyclic. At the time of writing 
 this documentation, cycles cannot occur, but new 
-subclasses of MangledName must be added carefully to avoid 
+subclasses of ```MangledName``` must be added carefully to avoid 
 introducing cycles.
 
-## Name structure
+## From Mangled to Viper Names
+We regard each **mangled name** as consisting of three components:
+1. *Basename* — a symbolic identifier that denotes the core of the name.
+It is not a string by itself but a symbolic value.
+2. *Scope* — a symbolic identifier that specifies the context
+in which the name exists. Like the basename, it is not
+initially a string but a symbolic value.
+3. *Type* — a string that indicates the category or kind of the name.
 
-We regard our names as consisting of two parts:
-1. A *namespace* that specifies the context a name is in.
-2. A *local name*  that is unique within the namespace.
+Note that *basename* and *scope* may themselves contain **mangled names**: 
+for example, a function may be namespaced within a class, which
+itself has a scope.
 
-Note that namespace names may themselves contain names: for
-example, a function may be namespaced within a class, which
-itself has a namespace.
+From each **mangled name**, a corresponding **Viper name** in one 
+of three possible forms:
+1. ```basename_reqiredScope```
+2. ```type_basename_requiredScope```
+3. ```type_basename_fullScope```
 
-Local names may also contain names: for example, the name of
-a function may contain the types of its parameters.
-However, to make the program tractable we assume that local
-names are guaranteed to be unique in their full form.  Local
-names may also have shorter forms, that should be used if
-they do not collide.
+Where:  
+**fullScope** — string representation of *Scope*.  
+**requiredScope** — string representation of the essential part 
+of *Scope* (currently, only classes).  
+**optionalScope** — string representation of all remaining parts 
+of *Scope*, including the *Type* and any non-essential elements.
 
 ### Example
 
@@ -60,21 +71,15 @@ fun foo() {
     val x: Int = ...
 }
 ```
-
-When converting the `foo()` function, we can see the
-following namespaces:
-* The package.
-* The classes `A` and `B`.
-* The function `foo()`.
-* The parameters of other functions.
-
-This is not an exhaustive list of the namespaces in the
-resulting program: new symbols are generated in the
-translation to Viper, and these symbols often get their own
-namespaces.  This includes namespaces for return values and
-labels.
-
-We can identify the possible local names in this example:
+When converting the **mangled name** of A.foo() method, we have 
+following parts:  
+1. ```basename =  "foo()"```
+2. ```scope = classA.name```, where classA.name initially
+symbolic value
+4. ```type = "f"```, because foo() - function
+    
+We can identify the possible **viper names** for each
+**mangled name** :
 * `class A` -> `class_A`, `A` (same for `B`)
 * `fun A()` -> `fun_A_takes_Unit_returns_Unit`,
   `fun_A_takes_Unit`, `fun_A`, `A` (same for the `foo`
@@ -83,108 +88,150 @@ We can identify the possible local names in this example:
 * Getter of `var x` in `B` -> `prop_x_getter`, `prop_x`, `x`
 * Setter of `var x` in `B` -> `prop_x_setter`, `prop_x`, `x`
 * Parameter `x` in `fun foo(...)`: `x`
-  
+
 ## Algorithm
 
-1. Traverse the program and add mangled names.
-2. Build a directed dependency graph where each vertex is a
-pair $(x, \text{version})$, with $x$ being a mangled name
-and $\text{version} \in \{\text{short}, \text{medium}, \text{long}\}$
-(there may be additional versions depending on the type of name).
-Add an edge $(x, v_x) \to (y, v_y)$ if representing
-$(x, v_x)$ requires knowing the representation of $(y, v_y)$.
-To check this, we simply analyze the specific cases.
-3. Obtain a topological sort of the dependency graph (given the
-nature of dependencies on mangled name components, this graph
-should be acyclic).
-4. Traverse the dependency graph in the topological order.
-Upon entering a vertex, compute $s(n, v)$ (with no cycles
-in the dependency graph, there should be sufficient information for this).
-Attempt to replace the current version (for `n.basename`) with $v$.
-If there are no conflicts with already assigned names and $v$ is a more
-beneficial version, make the change.
-5. When resolving a name, examine its `basename` and output the representation
-based on its assigned version.
+We work with two graphs:
 
-### Annotated example
+a **dependency graph** whose vertices are pairs 
+$(x, \text{version})$,  where $x$ is a mangled name 
+and $\text{version} \in \{\text{short}, \text{medium}, 
+\text{long}, \ldots\}$.  
+Edges encode that rendering $(x, v_x)$ requires the representation 
+of $(y, v_y)$.
 
-Let us return to the example above, with the preferred names
-annotated:
-```kotlin
-// A: A, class_A
-// x: x, field_x
-class A(val x: Int) {
-    // foo: foo, fun_foo, fun_foo_takes_Unit, fun_foo_takes_Unit_returns_Int
-    fun foo(): Int = ...
-}
+a **conflict graph** with the **same set of vertices** 
+$(x, \text{version})$.  
+Edges encode that two different vertices cannot be assigned 
+simultaneously, because their resulting strings would collide.
 
-// B: class_B, B
-class B {
-    // get x: x, prop_x, prop_x_getter
-    // set x: x, prop_x, prop_x_setter
-    var x: Int
-        get() { ... }
-        set(v) { ... }
-}
+### Procedure
 
-// A: A, fun_A, fun_A_takes_Unit, fun_A_takes_Unit_returns_Unit
-fun A() { ... }
+1. **Pick sinks in the dependency graph.**  
+   Take all vertices with out-degree $0$ (no unresolved dependencies).
 
-// foo: foo, fun_foo, fun_foo_takes_ABC, fun_foo_takes_ABC_returns_XYZ
-// x: x
-// B: B
-fun foo(x: Int, B: Int) { ... }
+2. **Fix the version indicated by the sink vertex.**  
+   For each sink $(x, v)$, we attempt to **assign version $v$** to $x$.  
+   The assignment is allowed iff **all** of the following hold:
+  - **No collisions** are created with already assigned strings.
+  - **Basename fairness:** no other name with the **same basename** has
+    already been assigned a **strictly shorter** version than $v$.
+  - **Feasibility:** after the assignment, there is **no** vertex in
+    the conflict graph for which **all** versions become banned
+    (i.e., every vertex still has at least one admissible version).
 
-// foo: foo, fun_foo, fun_foo_takes_Unit, fun_foo_takes_Unit_returns_Unit
-fun foo() {
-    // x: x
-    val x: Int = ...
-}
-```
+   **Group assignment by basename.**  
+   If we assign $x$ version $v$, then **for all** $y$ with 
+   $y.\!basename = x.\!basename$ we also assign **version $v$** 
+   (provided they are not fixed yet). In other words, versions 
+   are assigned **in groups** per basename, not one-by-one.
 
-We construct a dependency graph where each node represents a possible 
-version of a name (for classes, fields, parameters: short/medium; for functions: 
-*_with_takes and *_takes_returns). An edge $(x, v_x) → (y, v_y)$ indicates that 
-choosing the representation of $x$ in version $v_x$ depends on the representation of $y$ 
-in version v_y.
+   After committing, update the affected subtrees in the dependency graph.
 
-Once the graph is built, we perform a topological sort. This determines a safe 
-order to traverse the graph such that all dependencies are resolved before a node 
-is processed. Traversing the nodes in topological order, we attempt to assign the 
-shortest available version of each name that does not conflict with previously 
-assigned names.
+3. **Prune resolved vertices.**  
+   Remove **all vertices whose basename got fixed** (i.e., all
+   $(y, \cdot)$ with $y.\!basename = x.\!basename$), together
+   with incident edges.
 
-Following this procedure on our example, the topological order leads us to first 
-assign names to global entities (class A, class B, fun A, fun foo(...), fun foo()), 
-which then allows us to resolve names that depend on them, such as methods inside 
-classes and property getters/setters. Because the assignments respect dependencies 
-and avoid collisions at each step, the resulting names are both unique and 
-as short as possible:
+5. **Repeat until stable.**  
+   Return to Step 1 while conflicts remain or further assignments
+   are possible.
 
-* `class A` -> `class_A`
-* `class B` -> `B`
-* `fun A` -> `fun_A`
-* `fun foo(...)` -> `fun_foo_takes_x_B`
-* `fun foo()` -> `fun_foo_takes_Unit`
 
-Local names inside these namespaces, such as method and parameter names, 
-are then resolved in the same way, producing the final unique names shown in the 
-code above.
-```kotlin
-class class_A(val class_A_x: Int) {
-    fun class_A_foo(): Int = ...
-}
 
-class B {
-    fun B_prop_x_getter(): Int { ... }
-    fun B_prop_x_setter(param_v: Int) { ... }
-}
+### Walkthrough: assigning a name to `A.foo()` (first iterations)
 
-fun fun_A() { ... }
+We illustrate how a **mangled name** becomes a concrete **Viper name** 
+using `A.foo()`.  
+A key rule: **all entities that share the same basename must receive 
+the same version.**  
+So decisions are made in **groups per basename**, not individually.
 
-fun fun_foo_takes_x_B(param_x: Int, param_B: Int) { ... }
 
-fun fun_foo_takes_Unit() {
-    val param_x: Int = ...
-}
-```
+
+**Components (symbolic at the start).**
+- $basename = \text{"foo()"}$ — symbolic identifier (not a string yet).
+- $scope = A$ — points to class `A` (symbolic until `A` is named).
+- $type = \text{"f"}$ — category “function”.
+
+**Version–to–form mapping (preference short → long).**
+- $short \;\mapsto\; basename\_\!requiredScope$
+- $medium \;\mapsto\; type\_basename\_\!requiredScope$
+- $long \;\mapsto\; type\_basename\_\!fullScope$
+
+Concretely for $A.foo()$ (these become **strings only after $A$ is 
+named**):
+- $short:\; foo()_A$
+- $medium:\; fun\_foo()_A$
+- $long:\; fun\_foo()_{\langle fullScope(A)\rangle}$
+
+
+
+#### Iteration 1 — $(A, short)$ as a sink
+
+At the very beginning, $(A, short)$ is an sink in the 
+dependency graph: out-degree $0$.  
+By the procedure, we now *attempt to fix* basename `"A"` at version $short$.
+
+Group assignment for basename `"A"` includes:
+- class `A` → `"A"`
+- function `A()` → `"A"` (since its requiredScope is empty at top level)
+
+Conflict check:
+- both would become the same string `"A"` → **collision**.
+
+Assignment fails.  
+Since `"A"` is not fixed, $(A, short)$ is pruned as unassignable.  
+Next, the dependency graph still contains $(A, medium)$ and $(A, long)$.
+
+
+#### Iteration 2 — $(A, medium)$ as a sink
+
+Now $(A, medium)$ is a new sink.  
+We attempt to fix basename `"A"` at version $medium$.
+
+Group assignment:
+- class `A` → `"class_A"`
+- function `A()` → `"fun_A"`
+
+Checks succeed:
+- no collisions,
+- we haven’t fixed `"A"` before with a shorter version,
+- feasibility preserved.
+
+Commit group assignment: $basename = \text{"A"} \mapsto medium$.  
+Remove all vertices with basename `"A"` from the dependency graph.
+
+
+#### Iteration 3 — $(A.foo(), short)$ as a sink
+
+With `A` resolved, the vertices for `A.foo()` become sinks.  
+We now process $(A.foo(), short)$.
+
+Group assignment for basename `"foo()"` includes:
+- method `A.foo()` → `"foo()_A"`
+- top-level `foo()` → `"foo()"` (requiredScope empty)
+- possibly others (e.g. `B.foo()` → `"foo()_B"`)
+
+Suppose these strings don’t collide.  
+Checks succeed, so we can commit.
+
+Commit group assignment: $basename = \text{"foo()"} \mapsto short$.  
+Remove all `"foo()"` vertices.
+
+
+#### Iteration 4 — possible fallback later
+
+If later a collision is detected in the conflict graph (e.g. two 
+unrelated `foo()` collapsing to the same string),  
+the algorithm will eventually reach $(foo(), medium)$ as a sink, 
+and then reassign the entire basename-group `"foo()"` to $medium$:
+- `"fun_foo()_A"`, `"fun_foo()"`, …
+
+If still needed, escalation to $(foo(), long)$ is possible.
+
+
+Thus, the algorithm never “tries shorter first by hand”:  
+we simply process sink vertices $(x,v)$ in turn,  
+and the group assignment either succeeds (commit) or fails (discard 
+this vertex and continue with another sink).
