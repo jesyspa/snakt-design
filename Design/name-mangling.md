@@ -25,6 +25,9 @@ introducing cycles.
 ## From Mangled to Viper Names
 Each **mangled name** has an ordered list of *candidate* 
 strings (shortest first).  
+A *candidate* is a symbolic form that 
+renders to the final viper name and **knows which 
+other names it depends on**.  
 We expose two operations:  
 ```currentCandidate(x): string``` - returns the currently selected 
 string (candidate) for ```x```.  
@@ -34,8 +37,6 @@ the list is exhausted) and returns the new current string.
   
 The final **Viper name** for ```x``` is simply the 
 ```currentCandidate(x): string```.  
-Note: *Candidates* may reference other names. Thus, the string 
-of ```x``` may depend on already chosen strings of other names. 
 
 ### Example
 
@@ -81,7 +82,6 @@ $G$ is a DAG (see **Constraints**).
 ### Initialization 
 1. For each name ```x```, build its candidate list.
 2. Build ```G```. 
-3. Compute initial strings for all names in a topological order of ```G```.
 ### Main Loop
 Repeat until there are no conflicts: 
 1. **Detect conflicts**  
@@ -97,10 +97,6 @@ where $\text{FixSet} \subseteq \text{Conflicted}, \text{FixSet}
 3. **Advance candidates**  
 For each $x \in \text{FixSet}$, call ```deleteCurrentCandidate(x)```
 to move to the next candidate (or fallback).
-4. **Recompute affected string**  
-  For every name $v$ such that there exists a directed path $v\to x$
-in $G$ for some $x \in \text{FixSet}$, recompute
-```currentCandidate(v)``` in topological order.
 
 ### Walkthrough: assigning a name to `A.foo()`
 
@@ -121,5 +117,5 @@ We illustrate how a **mangled name** becomes a concrete
 
 After iteration, for ```class A``` change candidate:  
 ```"A"``` $\to$ ```"class_A"```.  
-**Recompute affected string:**  
+**Affected string:**  
 ```A_foo()``` $\to$ ```class_A_foo()```
