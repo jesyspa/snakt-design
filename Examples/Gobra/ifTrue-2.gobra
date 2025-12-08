@@ -1,0 +1,252 @@
+package closures
+
+/*
+original program:
+
+func main() {
+    x := 1
+    f := func() {
+        x = x + 1
+    }
+    callIfTrue(true, f)
+    assert x == 2
+}
+
+func callIfTrue(b bool, f func()) {
+    if b {
+        f()
+    }
+}
+*/
+
+/* reusable part */
+
+type CapturedState interface {
+    // ownership of the captured states 'x'
+    pred Own(x any)
+
+    // abstraction of the captured state, maps it
+    // to a mathematical domain
+    ghost
+    requires Own(x)
+    decreases
+    pure View(x any) any
+}
+
+// "call-description" for a non-pure function with precondition 'pre'
+// and postcondition 'post'. While the syntax does not make it clear yet,
+// this is NOT meant to be treated as a regular abstract function, but rather
+// as the contract for a function. We have plans to change the syntax for this.
+// In order to call a function f that matches this description, we need to (1) pass
+// the ownership of the captured state, (2) show that the precondition 'pre' holds,
+// (3) show that the function 'post' is compatible with the 'postSpec' call descriptor.
+// Because 'pre' is a bool value, we are not able to pass permissions into f except
+// for the perms to the captured state, but we can probably enrich the contract to be
+// able to do that. The 'post' func related the old value of the captured state with
+// the new. To avoid further complications with permissions, I made it so that it compares
+// only the abstract view of the state, not its actual concrete values. We can probably
+// enrich the specs for maximum expressibility here too.
+// Finally, there are two parameters here for technical reasons: an instance of the
+// CapturedState interface, which determines how to interpret the captured state,
+// and 'v', which is the actual captured state.
+requires captured != nil && captured.Own(v)
+requires pre
+requires post implements postSpec
+ensures  captured.Own(v)
+ensures  post(old(captured.View(v)), captured.View(v)) as postSpec
+decreases
+func fSpec(
+    ghost captured CapturedState,
+    v any,
+    ghost pre bool,
+    ghost post func(oldView any, newView any) bool)
+
+// "Call-description" for functions describing the effects
+// of fSpec on the captured state.
+ghost
+decreases
+pure func postSpec(ghost oldView any, ghost newView any) bool
+
+/* problem-specific part */
+
+// Interpretation of the captured state for this specific program
+type St struct{}
+
+pred (s St) Own(x any) {
+    // typeOf(x) == type[*int] &&
+    // acc(x.(*int))
+    typeOf(x) == type[*bool] &&
+    acc(x.(*bool), 1/2)    
+}
+
+ghost
+requires s.Own(x)
+decreases
+pure func (s St) View(x any) any {
+    // return unfolding s.Own(x) in *(x.(*int))
+    return unfolding s.Own(x) in *(x.(*bool))
+}
+
+St implements CapturedState
+
+// Postcondition of the closure used in this particular example
+ghost
+decreases
+pure func PostOfClosure(oldView any, newView any) bool {
+    // return typeOf(oldView) == type[int] &&
+    //     typeOf(newView) == type[int]    &&
+    //     ToInt(oldView) + 1 == ToInt(newView)
+    return typeOf(oldView) == type[bool] &&
+        typeOf(newView) == type[bool]    &&
+        ToBool(oldView) == ToBool(newView)
+}
+
+// There is one technical limitation in Gobra at the moment.
+// To concretize to this particular problem, from the fact that
+// `PostOfClosure(oldView, newView) as postSpec` holds (read this as
+// "PostOfClosure(oldView, newView) holds when it called with the call descriptor postSpec"),
+// we are not able to establish that `PostOfClosure(oldView, newView)` holds, even
+// though it must hold because it is the same function. This is a limitation of the encoding
+// that we might be able to overcome if need be. This lemma just axiomatizes the equality
+// that is missing.
+ghost
+requires PostOfClosure implements postSpec
+ensures  PostOfClosure(oldView, newView) as postSpec == PostOfClosure(oldView, newView)
+decreases
+func TrustedLemmaPostOfClosure(oldView any, newView any)
+
+/* annotated code */
+
+// After erasing all ghost code, the code below should match the
+// one shown in the beginning of this file.
+
+func havoc_bool() bool
+
+func main() {
+    // x@ := 1
+    x@ := havoc_bool() // Get an unknown boolean
+
+    // we pick St{} as our interpretation of the captured state
+    fold St{}.Own(&x) // ownership of captured state
+
+    // assert x // Fails - as expected
+    assert x == St{}.View(&x) // Holds - as expected
+
+    f :=
+        requires St{}.Own(&x) // ownership of the captured state
+        requires ToBool(St{}.View(&x))
+        ensures  St{}.Own(&x)  // ownership of the captured state
+        // effects of the call on the abstraction of the captured state
+        ensures PostOfClosure(old(St{}.View(&x)), St{}.View(&x))
+        decreases
+        func() {
+            unfold St{}.Own(&x)
+            // x = x + 1
+            assert x
+            fold St{}.Own(&x)
+        }
+    // There is currently a bug where trying to prove (rather than assuming)
+    // the following assertion leads to an exception in the type-system. This
+    // is not major, but trying to establish this leads to an exception.
+    // proof f implements fSpec{captured, v, true, post} {}
+    assume f implements fSpec{St{}, &x, ToBool(St{}.View(&x)), PostOfClosure}
+    
+    ghost oldView := St{}.View(&x)
+    // assert ToInt(oldView) == 1
+
+    // There is currently a bug where trying to prove (rather than assuming)
+    // the following assertion leads to an exception in the type-system. This
+    // is not major, but trying to establish this leads to an exception.
+    // proof f implements fSpec{captured, v, true, post} {}
+    assume PostOfClosure implements postSpec
+
+    callIfTrue(
+        // true, f, // non-ghost params
+        x, f, // non-ghost params
+        /* ghost */ St{}, // interpretation for the captured state
+        /* ghost */ &x, // actual captured state
+        /* ghost */ ToBool(St{}.View(&x)), // precondition
+        /* ghost */ PostOfClosure) // postcondition
+
+    ghost newView := St{}.View(&x)
+    // assert PostOfClosure(oldView, newView) as postSpec
+    // Establishes equality that the encoding fails to establish
+    // TrustedLemmaPostOfClosure(oldView, newView)
+    // assert PostOfClosure(oldView, newView)
+    
+    // assert ToInt(newView) == 2
+    
+    // assert x // Fails - as expected
+    
+    unfold St{}.Own(&x)    
+    // assert x == 2
+}
+
+// The interesting thing about the spec of this function is that it does not
+// require knowing a priori the possible values for 'f'. Instead, the caller
+// is free to pass any 'f', as long as it is compatible with the call descriptor
+// fSpec, under the interpretation 'captured' for the captured state 'v'.
+requires captured != nil
+requires post implements postSpec
+requires f implements fSpec{captured, v, pre, post}
+requires b ==>
+    captured.Own(v) && pre
+ensures  b ==>
+    captured.Own(v) && post(old(captured.View(v)), captured.View(v)) as postSpec
+decreases
+func callIfTrue(
+    b bool, 
+    f func(), 
+    ghost captured CapturedState,
+    ghost v any, 
+    ghost pre bool,
+    // P.S.: you might want to make this function also depend on the parameters to the function 
+    ghost post func(oldView any, newView any) bool) {
+    if b {
+        f() as fSpec{captured, v, pre, post}
+    }
+}
+
+/* Util */
+
+// Nevermind the introduction of this function, it's here to
+// get around a bug in the Gobra type system
+ghost
+requires typeOf(x) == type[int]
+decreases
+pure func ToInt(x any) int {
+    return x.(int)
+}
+
+ghost
+requires typeOf(x) == type[bool]
+decreases
+pure func ToBool(x any) bool {
+    return x.(bool)
+}
+
+
+/* Ignore from here
+
+
+type CSpec interface {
+    pred Own(x any)
+
+    requires  Own(x)
+    decreases
+    pure ViewCapturedState(x any) any
+
+    decreases
+    pure ClosurePre(v any) bool
+
+    decreases
+    pure ClosurePost(vOld any, vNew any) bool
+
+    requires Own(x)
+    requires ClosurePre(ViewCapturedState(x))
+    ensures  Own(x)
+    ensures  ClosurePost(old(ViewCapturedState(x)), ViewCapturedState(x))
+    decreases
+    ClosureSpec(x any)
+}
+*/
