@@ -3,18 +3,44 @@
 In order to translate pure Kotlin functions into Viper functions their body must
 be translated into a single expression. Therefore, reassignments of variables may
 not happen on the Viper level which is why the ExpEmbedding must be translated
-into SSA form.
+into SSA form. The most commonly employed approach to transform a program into SSA
+form is described in the below paper by Cyrton et al.:
+
+https://dl.acm.org/doi/10.1145/115372.115320
+
+However, this approach requires knowledge of the whole CFG. The current
+version of SnaKt with its embedding representation does not provide this. Therefore,
+we will rely on an algorithm by Braun et al., which can be used to directly transform
+a program into SSA form from its AST:
+
+https://c9x.me/compile/bib/braun13cc.pdf
+
+Note however, that this algorithm relies on recursive calls to preceding nodes
+in the AST, which due to the structure of the embeddings in SnaKt, we will
+avoid by carrying enough state into child nodes. 
+
+To explain our adaption of this algorithm further, we will follow the structure
+in the paper. First we will explain how to translate a single block into SSA
+form and then elaborate on how we can extend this to an arbitrary program.
 
 ## Converting a Block to SSA form
 
-Assuming we have a block embedding with no branching (branching in the CFG that
-is), converting into SSA form is quite straight-forward:
-- Traverse the ExpressionEmbeddings in the block in order
-- As soon as a reassignment is found introduce a new variable and assign it the
-  RHS of the reassignment.
-- In subsequent usages of the 'original' variable use the newly introduced
-  version.
-In code this may look like the following:
+The only condition in the above paper for translating a basic block into SSA form
+is to traverse the expressions in the block in program order. As the embedding
+representation of a block in SnaKt already does this upon calling .toViper()
+we can perform the necessary transformations at this stage. Namely we will:
+- Keep a mapping from each source variable to its current defining expression
+in the SSAConverter. This mapping is on a block-basis (important later)
+- When a variable is read, we pass control flow to the PureLinearizer, look
+up the curent defining expression of the variable and substitute. To substitute
+a variable we will pass control to the Linearizer upon traversing a VariableEmbedding,
+which then resolves the embedding to the name of the variable holding the current
+defining expression of the corresponding source variable.
+- When a variable assignment is traversed the PureLinearizer will call
+the SSAConverter to update the current defining expression of that source
+variable to hold the RHS of the assignment
+
+Overall this will result in the following translation behaviour:
 ```kotlin
 var x = 1
 x = x + 1
@@ -26,39 +52,29 @@ let x_0 == (1) in
 let x_1 == (x_0 + 1) in
 x_1
 ```
-Note: An optimized encoding of the above example could be created by assigning
-1 + 1 directly to x_0. In general, if no usages occur between two reassignments
-of the same variable we can omit one assignment.
-
-To implement the above algorithm we need to introduce some state tracking the
-assignments of a variable: Then when encountering a variable usage in our block
-we have two options:
-
-1. If the variable is a LHS of an assignment update the variable state to carry
-   the RHS as the new 'latest' version of the variable
-2. Otherwise use the latest version of the variable
-
-We introduce those additional variables on the Viper AST level. That is the
-ExpEmbeddings continue to contain the original variable value and we inject the
-'latest' SSA version upon translation.
 
 ## What about branching?
 
-To convert an arbitrary program into SSA form, we will adhere to the following conversion algorithm:
+It is important to note, that in the current version of this SSA transformation
+we assume that our program does not contain any back-edges in its CFG. When
+encountering a source variable that has no defining expression in the current
+block we can therefore safely assume, that the full defining expression must 
+exist in some previously traversed block. Therefore, introducing the following
+state in the SSAConverter will suffice to resolve any variable usage to a 
+defining expression:
+- A mapping from a block to their predecessors
+- The information about a basic block needs to be extended to hold information
+under what condition a block is traversed.
+The action on encountering an assignment to a variable remains the same as above.
+When reading a variable, that has no defining expression in the current basic
+block, we do the following:
+- If the basic block only has one predecessor, use the current definition
+of the source variable of that block
+- If there is more than one predecessor, use the conditional information tracked
+to construct a $\Phi$ function selecting the correct upstream value of the variable.
+use this $\Phi$ function as the current defining expression of the variable.
 
-https://dl.acm.org/doi/10.1145/115372.115320
-
-The key idea is the following: Whenever a join in the control flow graph (CFG)
-of the program is encountered and if it is necessary, a $\Phi$ function is
-assigned to the next 'version' of a variable. This $\Phi$ function selects the
-correct upstream (upstream in the CFG that is) value of the variable based on
-the execution path taken to reach that block. The efficient identification of
-necessary locations for $\Phi$ functions is determined using dominance frontiers,
-ensuring they are only inserted where distinct definitions actually collide. The
-dominance frontier of a node d is the set of nodes that are not strictly
-dominated by d, but have an immediate predecessor that is. A node $d$ strictly
-dominates another node $d'$ if all paths to $d'$ in the CFG go through $d$.
-Consider the following program:
+Overall this approach will result in the following translation behaviour:
 
 ```kotlin
 var x = 0
@@ -70,24 +86,7 @@ if (x == 1) {
 val y = x
 return y
 ```
-
-To understand the above described algorithm better, let's take a look at the CFG
-of the above example: 
-
-![](images/SSA-CFG-example.jpg)
-
-Let's analyse the dominance frontiers $DF$ in this graph:
-
-- $DF(A)$ = $\emptyset$ - as A strictly dominates every other node
-- $DF(B)$ = $\{D\}$ - as you can reach D via C
-- $DF(C)$ = $\{D\}$ - as you can reach D via B
-- $DF(D)$ = $\emptyset$ - as D does not dominate any nodes (as it has no child)
-
-Therefore, a $\Phi$ selecting the correct upstream value must be inserted at node
-$D$. As the correct upstream value to be selected is determined by the result of
-an if-statement a ternary operator will suffice as the $\Phi$ function here
-
-Overall, this program translates to:
+translates to:
 ```viper
 let x_0 == (0) in
 let x_1 == (x_0 + 2) in
@@ -95,7 +94,43 @@ let x_2 == (x_0 + 3) in
 let y_0 == ((x_0 == 1) ? x_1 : x_2) in
 y_0
 ```
+Note, that the ternary condition results from the if condition. That is, if the 
+if_condition is true, we use x_1, otherwise we use x_2.
 
-Implementation note: To perform this translation two things are required:
-- A CFG topology (can be derived from the ExpEmbedding structure)
-- A map between variable definitions and the blocks they occur in 
+## Partial operations problem
+Consider the following example:
+```kotlin
+@Pure
+fun safeDivide(val x: Int, val y: Int): Int {
+    var res = 0
+    if (y != 0) {
+        res = x / y
+    } else {
+        res = -1
+    }
+    return res
+}
+```
+using the above, this translates to:
+```viper
+function safeDivide(x: Int, y: Int): Int {
+  let res_0 == (0) in
+  let res_1 == (x / y) in
+  let res_2 == (-1) in
+  let res_3 == ((y != 0) ? res_1 : res_2) in
+    res_3
+}
+```
+This code will not verify because y might be 0, and Viper will attempt to verify the division x / y
+ unconditionally. Therefore, for partial operations like division, we must lift the ternary check 
+ directly into the corresponding variable definitions. A resulting translation might look like the 
+ following:
+```viper
+function safeDivide(x: Int, y: Int): Int {
+  let res_0 == (0) in
+  let res_1 == ((y != 0) ? x / y : res_0) in
+  let res_2 == (-1) in
+  let res_3 == ((y != 0) ? res_1 : res_2) in
+    res_3
+}
+```
