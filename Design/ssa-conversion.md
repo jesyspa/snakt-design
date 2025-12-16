@@ -28,17 +28,19 @@ form and then elaborate on how we can extend this to an arbitrary program.
 The only condition in the above paper for translating a basic block into SSA form
 is to traverse the expressions in the block in program order. As the embedding
 representation of a block in SnaKt already does this upon calling .toViper()
-we can perform the necessary transformations at this stage. Namely we will:
-- Keep a mapping from each source variable to its current defining expression
-in the SSAConverter. This mapping is on a block-basis (important later)
-- When a variable is read, we pass control flow to the PureLinearizer, look
-up the curent defining expression of the variable and substitute. To substitute
-a variable we will pass control to the Linearizer upon traversing a VariableEmbedding,
-which then resolves the embedding to the name of the variable holding the current
-defining expression of the corresponding source variable.
-- When a variable assignment is traversed the PureLinearizer will call
-the SSAConverter to update the current defining expression of that source
-variable to hold the RHS of the assignment
+we can perform the necessary transformations at this stage. There are two components
+responsible for this. The SSAConverter holds state and provides functionality to perform
+an SSA transformation. The PureLinearizer, which exists to linearize an ExpEmbedding into
+a Viper expression, will call out to the SSAConverter if necessary. The following will be
+introduced:
+- A mapping from source variables to a list of new variable definitions, where each variable 
+definition represents a reassignment of the original source variable. This mapping is on a
+per-block basis (important later).
+- When reading a variable, the PureLinearizer will resolve the variable name to the variable
+name holding the latest definition of the original source variable in the current block by
+calling out to the SSAConverter.
+- When encountering an assignment, the PureLinearizer will call out to the SSAConverter to
+make note of this reassignment and save the new defining expression of the source variable.
 
 Overall this will result in the following translation behaviour:
 ```kotlin
@@ -62,9 +64,12 @@ block we can therefore safely assume, that the full defining expression must
 exist in some previously traversed block. Therefore, introducing the following
 state in the SSAConverter will suffice to resolve any variable usage to a 
 defining expression:
-- A mapping from a block to their predecessors
+- A mapping from a block to their predecessors. This mapping is established when
+we encounter an instruction that branches from one block into another. To achieve
+this, we need to call out to the Linearizer when encountering such instructions.
 - The information about a basic block needs to be extended to hold information
 under what condition a block is traversed.
+
 The action on encountering an assignment to a variable remains the same as above.
 When reading a variable, that has no defining expression in the current basic
 block, we do the following:
@@ -134,3 +139,6 @@ function safeDivide(x: Int, y: Int): Int {
     res_3
 }
 ```
+Note: It is still to be determined, if we can identify partial operations. If not, we can
+lift the ternary check directly into the variable definition regardless of the operation
+that is being performed.
