@@ -15,32 +15,34 @@ a program into SSA form from its AST:
 
 https://c9x.me/compile/bib/braun13cc.pdf
 
-Note however, that this algorithm relies on recursive calls to preceding nodes
-in the AST, which due to the structure of the embeddings in SnaKt, we will
-avoid by carrying enough state into child nodes. 
-
 To explain our adaption of this algorithm further, we will follow the structure
-in the paper. First we will explain how to translate a single block into SSA
+in the paper. First we will explain how to translate a single AST block into SSA
 form and then elaborate on how we can extend this to an arbitrary program.
 
-## Converting a Block to SSA form
+## SnaKt block vs. AST block
 
-The only condition in the above paper for translating a basic block into SSA form
-is to traverse the expressions in the block in program order. As the embedding
-representation of a block in SnaKt already does this upon calling .toViper()
-we can perform the necessary transformations at this stage. There are two components
-responsible for this. The SSAConverter holds state and provides functionality to perform
-an SSA transformation. The PureLinearizer, which exists to linearize an ExpEmbedding into
-a Viper expression, will call out to the SSAConverter if necessary. The following will be
-introduced:
-- A mapping from source variables to a list of new variable definitions, where each variable 
-definition represents a reassignment of the original source variable. This mapping is on a
-per-block basis (important later).
-- When reading a variable, the PureLinearizer will resolve the variable name to the variable
-name holding the latest definition of the original source variable in the current block by
-calling out to the SSAConverter.
-- When encountering an assignment, the PureLinearizer will call out to the SSAConverter to
-make note of this reassignment and save the new defining expression of the source variable.
+In the following explanations we will distinct between two types of blocks:
+1. The SnaKt block, where we mean the block ExpEmbedding in SnaKt containing
+a sequence of embeddings
+2. The AST block, where we mean the basic block in a program containing a sequence
+of statements adhering to the definition in the paper (and in literature in general)
+
+## Translating an AST block into SSA form
+
+Adapting the approach from the paper we will do the following while traversing
+an AST block:
+
+- Maintain a mapping from source variables to a list of defining expressions:
+The last expression in this list represents the most recent defining expression
+we encountered for that source variable, the one before-hand the 2nd most recent
+and so on. For each of those defining expressions for a source variable $x$, we 
+will introduce a let binding, binding from  $x_i$ (where i is the index of the 
+definition in the list) to the expression.
+- When encountering a variable read, we substitute $x_i$, where i is the most recent
+index in the above described list, as the variable that is being read from,
+s. t. the most recent encountered version of the variable is read
+- When encountering a variable assignment, we update the list to hold the 
+RHS of the assignment as the latest encountered defining expression
 
 Overall this will result in the following translation behaviour:
 ```kotlin
@@ -55,31 +57,23 @@ let x_1 == (x_0 + 1) in
 x_1
 ```
 
-## What about branching?
+### Implmentation details
+- The state will be held in the SSAConverter
+- Upon variable reads and assignments control-flow will be passed to the PureLinearizer.
 
-It is important to note, that in the current version of this SSA transformation
-we assume that our program does not contain any back-edges in its CFG. When
-encountering a source variable that has no defining expression in the current
-block we can therefore safely assume, that the full defining expression must 
-exist in some previously traversed block. Therefore, introducing the following
-state in the SSAConverter will suffice to resolve any variable usage to a 
-defining expression:
-- A mapping from a block to their predecessors. This mapping is established when
-we encounter an instruction that branches from one block into another. To achieve
-this, we need to call out to the Linearizer when encountering such instructions.
-- The information about a basic block needs to be extended to hold information
-under what condition a block is traversed.
+## What about multiple AST blocks
 
-The action on encountering an assignment to a variable remains the same as above.
-When reading a variable, that has no defining expression in the current basic
-block, we do the following:
-- If the basic block only has one predecessor, use the current definition
-of the source variable of that block
-- If there is more than one predecessor, use the conditional information tracked
-to construct a $\Phi$ function selecting the correct upstream value of the variable.
-use this $\Phi$ function as the current defining expression of the variable.
+The problem we are facing while employing the algorithm from the paper in SnaKt
+is that SnaKt blocks differ from AST blocks. We can get around this by doing
+the following:
 
-Overall this approach will result in the following translation behaviour:
+Whenever we traverse an embedding, that branches into another AST block, we make
+note of the topology of the AST (that is what new blocks exist and under what
+conditions we branch into those). We then translate each of those AST blocks as
+described above and as described in the paper (inserting $\Phi$ functions when
+joining two AST blocks and if necessary).
+
+Overall this will result in the following translation behaviour:
 
 ```kotlin
 var x = 0
@@ -99,8 +93,19 @@ let x_2 == (x_0 + 3) in
 let y_0 == ((x_0 == 1) ? x_1 : x_2) in
 y_0
 ```
-Note, that the ternary condition results from the if condition. That is, if the 
-if_condition is true, we use x_1, otherwise we use x_2.
+
+### Implementation details
+- The AST blocks and the corresponding topology will be maintained in the SSAConverter
+- Control-flow will be passed to the linearizer upon encountering embeddings, that
+create new AST blocks
+
+### A note on previously defined variables
+As we are constructing the whole AST topology (in the sense of the paper) on the fly
+and as we are for now assuming no backwards edges in the CFG, we can search in the
+variable mappings of preceding AST blocks to find the value of an undefined variable
+in the current AST block. If at a later stage we are allowing backwards edges in the
+CFG of our program we have to introduce lazily evaluated phi functions as described
+in the paper.
 
 ## Partial operations problem
 Consider the following example:
