@@ -1,35 +1,42 @@
 # Name Mangling
 
-When converting FIR to Viper, we need to ensure that names
-do not conflict.  However, we would prefer short names over
-long names.  By registering all names used in the program
-and attempting to find cases when they can be shortened
-without collisions, we can make the generated code much more
-readable.
+When converting FIR to Viper, we need to ensure that 
+**Viper names** (string representations) do not 
+conflict.  However, we would prefer short names over
+long names.  By registering all **mangled names** 
+(the symbolic form before being assigned a Viper-compatible 
+string) used in the program and attempting to shorten 
+their corresponding **Viper names** whenever possible 
+without collisions, we make the generated code much more readable.
 
 Goals:
-* Names are globally unique.
-* Names are generally short enough to read at a glance.
+* Viper names are globally unique.
+* Viper names are generally short enough to read at a glance.
 
 Non-goals:
 * Optimising often-used names to be shorter.
 
-## Name structure
+Constraints:
+* The dependency graph must be acyclic. At the time of writing 
+this documentation, cycles cannot occur, but new 
+subclasses of ```MangledName``` must be added carefully to avoid 
+introducing cycles.
 
-We regard our names as consisting of two parts:
-1. A *namespace* that specifies the context a name is in.
-2. A *local name*  that is unique within the namespace.
-
-Note that namespace names may themselves contain names: for
-example, a function may be namespaced within a class, which
-itself has a namespace.
-
-Local names may also contain names: for example, the name of
-a function may contain the types of its parameters.
-However, to make the program tractable we assume that local
-names are guaranteed to be unique in their full form.  Local
-names may also have shorter forms, that should be used if
-they do not collide.
+## From Mangled to Viper Names
+Each **mangled name** has an ordered list of *candidate* 
+strings (shortest first).  
+A *candidate* is a symbolic form that 
+renders to the final viper name and **knows which 
+other names it depends on**.  
+We expose two operations:  
+```currentCandidate(x): string``` - returns the currently selected 
+string (candidate) for ```x```.  
+```deleteCurrentCandidate(x): string``` - advances ```x``` to 
+the next candidate (or applies a deterministic fallback if 
+the list is exhausted) and returns the new current string. 
+  
+The final **Viper name** for ```x``` is simply the 
+```currentCandidate(x): string```.  
 
 ### Example
 
@@ -54,21 +61,8 @@ fun foo() {
     val x: Int = ...
 }
 ```
-
-When converting the `foo()` function, we can see the
-following namespaces:
-* The package.
-* The classes `A` and `B`.
-* The function `foo()`.
-* The parameters of other functions.
-
-This is not an exhaustive list of the namespaces in the
-resulting program: new symbols are generated in the
-translation to Viper, and these symbols often get their own
-namespaces.  This includes namespaces for return values and
-labels.
-
-We can identify the possible local names in this example:
+We can identify the possible *candidates* for each 
+**mangled name** :
 * `class A` -> `class_A`, `A` (same for `B`)
 * `fun A()` -> `fun_A_takes_Unit_returns_Unit`,
   `fun_A_takes_Unit`, `fun_A`, `A` (same for the `foo`
@@ -78,111 +72,50 @@ We can identify the possible local names in this example:
 * Setter of `var x` in `B` -> `prop_x_setter`, `prop_x`, `x`
 * Parameter `x` in `fun foo(...)`: `x`
 
-## Approach
+## Algorithm
 
-We can regard the name mangling problem as a series of
-algorithms of the following form:
+We maintain a **dependence graph** G over names. There is a 
+directed edge $x \to y$ iff determining the string representation 
+of $x$ requires the string representation of $y$.  
+$G$ is a DAG (see **Constraints**).
 
-1. We have a set of objects `X`.
-2. Each `x: X` has a list of preferred names `x.names`,
-   where each preferred name is marked primary or secondary.
-  * We are guaranteed that all primary names are unique.
-  * Secondary names may clash.
-3. We create a map from names to objects, indicating which
-   objects laid a claim to what name.
-4. We resolve the claims.  For each `x: X`:
-  * If `x` has a secondary name claimed by no other
-    object, it gets that name.
-  * Otherwise, `x` gets its primary name.
-  * Note that if two objects claimed the same name as
-    primary, the uniqueness invariant was violated, so the
-    algorithm fails.
+### Initialization 
+1. For each name ```x```, build its candidate list.
+2. Build ```G```. 
+### Main Loop
+Repeat until there are no conflicts: 
+1. **Detect conflicts**  
+Group names by ther current string and define 
+$$\text{Conflicted} := \{ x| \exists y \neq x:
+currentCandidate(x) = currentCandidate(y)\}$$.  
+If ```Conflicted``` is empty, we are done.
+2. **Choose names to fix**  
+Invoke  
+```FixSet = chooseNamesForFix(Conflicted)```
+where $\text{FixSet} \subseteq \text{Conflicted}, \text{FixSet}
+\neq \emptyset$
+3. **Advance candidates**  
+For each $x \in \text{FixSet}$, call ```deleteCurrentCandidate(x)```
+to move to the next candidate (or fallback).
 
-We run this algorithm repeatedly:
-1. For every namespace, we resolve local names.
-2. We resolve qualified names that appear in namespaces.
-3. We resolve the remaining qualified names.
+### Walkthrough: assigning a name to `A.foo()`
 
-### Annotated example
+We illustrate how a **mangled name** becomes a concrete 
+**Viper name** using `A.foo()`.  
+**Candidate lists**:  
+```class A```: ```["A", "class_A"]```  
+```fun A()```: ```["A", "f_A", "f_A_takes_Unit", 
+"f_A_takes_Unit_returnsUnit"]```  
+```fun foo()```: ```["foo()", "f_foo()", "f_foo_takes_Unit"]```  
+```fun A.foo()```: ```["A_foo()", "f_A_foo()", "f_A_foo_takes_Unit"]```
 
-Let us return to the example above, with the preferred names
-annotated:
-```kotlin
-// A: A, class_A
-// x: x, field_x
-class A(val x: Int) {
-    // foo: foo, fun_foo, fun_foo_takes_Unit, fun_foo_takes_Unit_returns_Int
-    fun foo(): Int = ...
-}
+#### Iteration 1 — initial conflicts
 
-// B: class_B, B
-class B {
-    // get x: x, prop_x, prop_x_getter
-    // set x: x, prop_x, prop_x_setter
-    var x: Int
-        get() { ... }
-        set(v) { ... }
-}
+```class A``` $\to$ ```"A"```  
+```fun A()``` $\to$ ```"A"```  
+```FixSet = [class A()]```
 
-// A: A, fun_A, fun_A_takes_Unit, fun_A_takes_Unit_returns_Unit
-fun A() { ... }
-
-// foo: foo, fun_foo, fun_foo_takes_ABC, fun_foo_takes_ABC_returns_XYZ
-// x: x
-// B: B
-fun foo(x: Int, B: Int) { ... }
-
-// foo: foo, fun_foo, fun_foo_takes_Unit, fun_foo_takes_Unit_returns_Unit
-fun foo() {
-    // x: x
-    val x: Int = ...
-}
-```
-
-We start by resolving global names, which are necessary for
-namespace names.  The global entities are `class A`, `class
-B`, `fun A`, `fun foo(...)`, and `fun foo()`; for each, we
-pick the shortest name that isn't claimed by anything else.
-We end up with the following selection:
-* `class A` -> `class_A`
-* `class B` -> `B`
-* `fun A` -> `fun_A`
-* `fun foo(...)` -> `fun_foo_takes_x_B`
-* `fun foo()` -> `fun_foo_takes_Unit`
-
-This lets us resolve all namespace names that depend on
-names in the program, namely for `class A` and `class B`.
-(Note that while `fun foo()` is a namespace, the name
-of that namespace is `local`.)
-
-We then resolve the local names per namespace.  The
-interesting case here is in `class B`, where the getter and
-setter of `x` collide.
-
-Every namespace-name pair is now unique, so we get the
-following code, with unique names.  (Note that we compile
-properties to fields or methods; we do so here for B.x to
-demonstrate.)
-```kotlin
-class class_A(val class_A_x: Int) {
-    fun class_A_foo(): Int = ...
-}
-
-class B {
-    fun B_prop_x_getter(): Int { ... }
-    fun B_prop_x_setter(param_v: Int) { ... }
-}
-
-fun fun_A() { ... }
-
-fun fun_foo_takes_x_B(param_x: Int, param_B: Int) { ... }
-
-fun fun_foo_takes_Unit() {
-    val param_x: Int = ...
-}
-```
-
-We could run the algorithm again on namespace-name pairs,
-and this may be worth doing to remove bulky namespace names
-when they aren't necessary.  However, more thought is needed
-to see when that will make life easier.
+After iteration, for ```class A``` change candidate:  
+```"A"``` $\to$ ```"class_A"```.  
+**Affected string:**  
+```A_foo()``` $\to$ ```class_A_foo()```
