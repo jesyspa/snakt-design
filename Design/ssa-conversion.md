@@ -1,204 +1,158 @@
-# Converting an ExpEmbedding into SSA form
+# Converting an `ExpEmbedding` into SSA Form
 
-When converting a pure Kotlin function into a Viper function, we have to translate
-the program into a single expression. This is realised in a chain of let bindings.
-In those, variable reassignments cannot occur. We therefore need to translate
-the code into SSA form to avoid any reassigning that might happen.
+When converting a pure Kotlin function into a Viper function, we must
+translate the function body into a single expression. This is realized as a
+chain of `let` bindings. In these bindings, variable reassignments cannot
+occur. We therefore need to translate the code into Static Single Assignment
+(SSA) form to avoid variable reassignments.
 
-## Theoretical background
+## Theoretical Background
 
-The most fundamental algorithm for translating a program into SSA form is described
-by Cyrton et al. [1].
+The most fundamental algorithm for translating a program into SSA form is
+described by Cytron et al. [1].
 
-However, this algorithm relies on the CFG of the program to be available, which
-is not the case for SnaKt. We will therefore implement an adaptation of the algorithm
-working on AST nodes, developed by Braun et al. [2]
+However, this algorithm relies on the availability of a Program's Control
+Flow Graph (CFG), which is not the case for SnaKt. We will therefore
+implement an adaptation of the algorithm working on AST nodes, developed by
+Braun et al. [2]. In the following, we will discuss the state introduced
+for this adaptation as well as the mechanics of the overall algorithm.
 
-## SnaKt block vs. AST block
+## Introduced State
 
-In the AST representation used by Braun et al. a block is a sequence of statements [2].
-That is, a block only contains linear code. This is not true in SnaKt. In SnaKt
-a block is a sequence of ExpEmbeddings, which contain - among other things - also
-branching embeddings. The main challenge we have to overcome therefore is to
-bridge the gap between the SnaKt representation of a block and the paper's representation of a block.
-In the following, we will call the SnaKt version a 'SnaKt block' and the Braun et al.
-version an 'AST block'
+### `SSAVariableName` and `SSAAssignment`
 
-## Local value numbering
+To uniquely identify assignments, we introduce the `SSAVariableName`. This
+name is a combination of the original source variable name and a unique
+index. For every new assignment encountered, we create a new
+`SSAVariableName` with a unique index. An `SSAAssignment` is defined as a
+pair consisting of an `SSAVariableName` and the expression defining that
+specific version of the source variable.
 
-Before converting our structure into one compatible with the paper's algorithm, 
-let us first assume that we have a single AST block we can traverse in program order
-and discuss any changes we have to make to the local value numbering algorithm [2]
-to create something similar for SnaKt.
+### SSA-Graph
 
-The key difference is that, as we are not swapping variables in place, but rather
-track *all* assignments to construct a linear let chain out of potentially non-linear
-code. We therefore need to maintain all assignments rather than only the 
-most recent as the paper does. 
+In the AST representation used by Braun et al., a block is a sequence of
+statements [2]. That is, a block only contains linear code. This is not true
+in SnaKt. In SnaKt, a block is a sequence of `ExpEmbedding`s, which
+may contain—among other things—branching embeddings. The main challenge we
+have to overcome is bridging the gap between the SnaKt representation of a
+block and the paper's representation.
 
-We will introduce the following:
-- The SSAConverter maintains a list of assignments in its scope.
-An assignment is a mapping between source variable and defining expression
-- The last expression in this list mapping a source variable to a defining expression
-represents the most recent defining expression we encountered for that source variable
-in the SSAConverter's scope, the one before that the 2nd most recent and so on. 
-- When encountering a variable assignment, we update the list to hold the 
-RHS of the assignment as the latest encountered defining expression. Further, we give
-this assignment a unique index. This index will be shared across SSAConverters such
-that when we are constructing the overall expression, each assignment has a unique
-per source variable index we can identify it by. In the resulting expression this
-assignment will therefore be held by the variable $x_i$, where x denotes the source 
-variable name and i the index of the assignment.
-- With the above established when encountering a VariableEmbedding during translation
-of some ExpEmbedding we can resolve its source variable to the name that will carry
-the most recent definition in the resulting expression. 
+We hence introduce a graph topology similar to the AST representation
+required by Braun et al. There are three types of nodes in this graph:
 
-### A note on side-effects
+- `SSAStartNode`: Represents the start of the graph.
+- `SSABlockNode`: Represents a block of linear code. This node maintains
+  a reference to its predecessor, the full condition that must be met for
+  this node to be encountered, and a mapping from source variable names to
+  `SSAVariableName`s to identify the latest valid version of a
+  source variable at this block.
+- `SSAJoinNode`: Represents a control-flow join in the graph. This node
+  maintains references to its left and right predecessors, a lookup cache,
+  and a local branching condition. This condition is necessary for control
+  flow to reach this node from its left predecessor.
 
-Think of the following Kotlin example:
+### `SSAConverter`
+
+The `SSAConverter` stores a reference to an `SSABlockNode` responsible for
+translating statements in the current block of code.
+
+Additionally, it is responsible for creating the resulting chain of `let`
+bindings after the whole function body is traversed. It therefore,
+stores a list of `SSAAssignment`s and a list of pairs consisting of
+return expressions and the full conditions required for control flow to
+reach those returns. Note that since the conditions are not mutually exclusive,
+the order of the list is relevant.
+
+## Actions While Traversing an `ExpEmbedding`
+
+While traversing an `ExpEmbedding`, the following cases are relevant for the
+SSA conversion:
+
+### Encountering an Assignment
+
+When an assignment to a source variable is encountered, the `SSAConverter`:
+1. Delegates to the current `SSABlockNode` to update its map from source
+   variable names to `SSAVariableName`s to hold a fresh `SSAVariableName` for
+   the source variable on the left side of the assignment.
+2. Adds an `SSAAssignment` consisting of the new `SSAVariableName` and the
+   right side of the assignment as its defining expression.
+
+### Encountering a Variable Usage
+
+When a variable is used in an expression, the `SSAConverter` looks up which
+`SSAVariableName` holds the defining expression for that source variable at
+the current point in the function body via the current `SSABlockNode`.
+
+The `SSABlockNode` finds the name as follows:
+- If it has a mapping for the source variable, that version is returned.
+- Otherwise, it looks up the name in its predecessor.
+
+If the search reaches an `SSAJoinNode`, the node performs the following:
+- If it has an `SSAVariableName` for the source variable in its cache, it
+  returns it.
+- Otherwise, it looks up the name in both its predecessors. If both
+  predecessors agree on the name (i.e., they return the same
+  `SSAVariableName`), that name is returned. Otherwise, the `SSAJoinNode`
+  delegates to the `SSAConverter` to create a new `SSAAssignment` where the
+  defining expression is a ternary expression. This expression selects the
+  value from the left predecessor if the local branching condition is met,
+  and otherwise selects the value from the right predecessor. This new
+  variable name is then cached at the node for future lookups.
+
+If the search reaches the `SSAStartNode`, it returns the original name being
+searched for. This serves as a fallback to the source variable name if no
+`SSAAssignment` can be found.
+
+### Encountering a Branch
+
+When encountering a branch (namely, an `IfEmbedding`), the `SSAConverter`
+does the following:
+
+1. Creates a new `SSABlockNode` for each branch to handle the translation.
+2. Initiates translation of each branch with these `SSABlockNode` instances
+   as the head nodes.
+3. Creates an `SSAJoinNode` to join both of the newly created `SSABlockNode`
+   branches.
+4. Creates another `SSABlockNode` succeeding the `SSAJoinNode` to translate
+   anything following the branch.
+
+## After the Function Body is Traversed
+
+After the whole function body is traversed, the `SSAConverter` is called to
+construct the resulting chain of `let` bindings. To do this, all collected
+return expressions are first folded into a single return expression.
+Specifically, the single return expression is a (potentially nested) ternary
+expression: If the condition for the first return expression is met, it
+resolves to that expression; if the condition for the second is met (and not
+the first), it resolves to the second, and so on.
+
+With this expression constructed, the collected `SSAAssignment`s are
+folded into a chain of `let` bindings, where the outermost `let` binding
+holds the first assignment, the second outermost `let` binding holds the
+second assignment etc. Consequently, the innermost `let` binding holds the last
+assignment, with the previously constructed return expression as its body.
+This overall expression is then returned as the function's body.
+
+## A Note on Side-Effects
+
+Consider the following Kotlin example:
 
 ```kotlin
 var x = 1
 x = x + run {x = x + 2; x} + run {x = x + 3; x}
 ```
 
-While at first glance those expressions and their side-effect in current scope
-may cause issues, we can check that as long as we traverse the expression in 
-the program order it is being evaluated in, we will construct the assignments
-one after the other and use the correct definition accordingly.
-
-## SnaKt block to AST block
-
-In the above we have assumed linear code consisting of a single AST block. To
-support any branching that might occur while translating an ExpEmbedding,
-we will construct the same topology AST blocks have between SSAConverters.
-To do so we will introduce the following for every SSAConverter:
-- A list of preceding SSAConverters
-- A list of succeeding SSAConverters
-
-Consider an If-Embedding being translated. The PureLinearizer will modify
-the relationships between SSAConverters, such that we have a 'diamond' shape.
-Namely we will have the following SSAConverters:
-- The current SSAConverter of the PureLinearizer will persist
-- Two SSAConverters will be introduced to translate everything in the scope
-of the branches (one for the then- and one for the 
-else branch)
-- One SSAConverter will be introduced representing a join node behind the
-two branches
-
-The current SSAConverter will have the two branch SSAConverters as its successors.
-These will have the joining SSAConverter as their successor and the joining converter
-will have any successor the current SSAConverter might have as its successor.
-Predecessors will be established accordingly.
-
-After this relationship between SSAConverters is established the delegating PureLinearizer
-will initiate the translation of both the then and else branch. After that it will update its SSAConverter
-to be the joining SSAConverter as this shall hold the variable definitions for any
-assignments occurring after the branch. Note that as the PureLinearizer is being copied
-with adjusted position information when a WithPosition-Embedding, which encapsulates
-an If-Embedding, is traversed rather than updating the reference to the SSAConverter,
-we will update an object holding the actual reference. This allows the change
-to be propagated to the PureLinearizer object translating any statements after the branch.
-
-For now, the implementation will restrict to the above case of an If-Embedding, only
-introducing support for ```if``` and ```when``` Kotlin statements. However, as 
-we are saving lists as predecessors and successors this approach can easily
-be extended to support more complex control-flow constructs if necessary.
-
-## Phi expressions
-
-Consider a SSAConverter succeeding the then and else branch of an if statement.
-Further imagine, that both branches modify a variable $x$. If in the scope of this
-SSAConverter $x$ is being used, we must be able to resolve to either the name defined
-in the then branch or the name of the else branch depending on previous control flow.
-This can be achieved as follows:
-
-Each SSAConverter holds a boolean expression under which it is being traversed. This condition
-can be extracted from the if-statement upon constructing the topology between SSAConverters.
-Note, that in the case of nested branching the innermost SSAConverter will only hold the condition
-of the innermost if, the 2nd innermost only the condition of the 2nd innermost if and so on. 
-We will call this condition local branching condition. As the created topology between
-SSAConverters ensures that there is a joining converter present for any branching,
-only storing the 'local' condition is sufficient (and makes the resulting expression cleaner).
-
-For the above described case we can now collect the variable definitions for $x$ from
-every preceding SSAConverter together with their local branching condition.
-With this information we can construct a ternary expression selecting the
-correct value of $x$ depending on the local branching conditions. We call this
-resulting expression *phi expression*. 
-
-## Resolving a variable to its definition
-
-With a topology between SSAConverters as described above and the capability
-to resolve variable names in local scope, we can now adapt the full algorithm
-from Braun et al. [2] to resolve a variable name to the name in the resulting
-expression holding its most recent definition:
-
-```
-def resolveVariableName(toResolve: VariableName):
-
-    # Adapted local value numbering as described above
-    if this SSAConverter holds a definition x for toResolve:
-        return x
-
-    # Adapted global value numbering
-    else:
-        resolveVariableNameRecursively(toResolve)
-```
-with:
-```
-def resolveVariableNameRecursively(toResolve: VariableName):
-
-    # Sole predecessor must hold the corresponding definition
-    if this SSAConverter only has one predecessor pre:
-        return resolveVariableName(pre)
-
-    # Multiple predecessors have definitions
-    else:
-        incomingNames := resolveVariableName(toResolve) for all predecessors
-        phiExpression := phi expression selecting the correct name from all incoming names
-        add an assignment of phiExpression to toResolve in this converter
-        return the name holding this assignment
-```
-
-## (Early) returns
-In our function we may have multiple return statements at any branch. We need to
-construct a single return expression from these returns. Note, that the
-SSAConverter in scope of the branch of the return expression will hold this expression as its body.
-To construct the overall expression, we will consider the global branching condition
-of an SSAConverter. That is in the case of nested branching the global branching condition -
-contrary to the local branching condition - will hold the conjunction of all conditions
-that need to be satisfied for control flow to reach this statement. We can then
-construct an overall return expression by:
-
-1. Creating a dependency graph traversal ordering of all SSAConverters
-2. Collecting all return expressions and their global branching conditions in dependency order
-3. Create a ternary expression that resolves to the first return expression
-if the first global branching condition is met, to the second return expression if
-the second global branching condition is met etc.
-
-This will result in a single return expression we can use.
-
-## Putting it all together
-
-We now have a topology between SSAConverters holding variable names and their definitions
-as well as an overall return expression.
-To construct a single expression from this we can do the following:
-
-1. Create a dependency graph traversal ordering of all SSAConverters
-2. Collect all assignments in that ordering
-3. Create a single chain of let bindings, where the outermost let-binding
-holds the first assignment and the 2nd outermost let-binding as its body etc.
-Consequently, the innermost let binding holds the last assignment and the
-overall return expression as its body.
-
-This will result in a single expression we can use in a Viper function.
+While at first glance those expressions and their side-effect in current
+scope may cause issues, we can check that as long as we traverse the
+expression in the program order it is being evaluated in, we will construct
+the assignments one after the other and use the correct definition
+accordingly.
 
 ## Literature
-[1] Cytron, R.; Ferrante, J.; Rosen, B. K.; Wegman, M. N.; Zadeck, F. K. (1991). 
-[Efficiently computing static single assignment form and the control dependence graph]
-(https://www.cs.utexas.edu/~pingali/CS380C/2010/papers/ssaCytron.pdf)
+[1] Cytron, R.; Ferrante, J.; Rosen, B. K.; Wegman, M. N.; Zadeck, F. K.
+(1991). [Efficiently computing static single assignment form and the control
+dependence graph](https://www.cs.utexas.edu/~pingali/CS380C/2010/papers/ssaCytron.pdf)
 
-[2] Braun, M.; Buchwald, S.; Hack, S.; Leißa, R.; Mallon, C.; Zwinkau, A. (2013). 
-[Simple and Efficient Construction of Static Single Assignment Form]
+[2] Braun, M.; Buchwald, S.; Hack, S.; Leißa, R.; Mallon, C.; Zwinkau, A.
+(2013). [Simple and Efficient Construction of Static Single Assignment Form]
 (https://c9x.me/compile/bib/braun13cc.pdf)
