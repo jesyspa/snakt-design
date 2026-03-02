@@ -118,6 +118,14 @@ does the following:
 4. Creates another `SSABlockNode` succeeding the `SSAJoinNode` to translate
    anything following the branch.
 
+## Encountering a return
+
+Upon encountering a return the `SSAConverter` is called to make note of the
+expressoin. It looks up the full condition that must be met for control-flow
+to reach this return in its current `SSABlockNode`. It then creates a pair
+of condition and return expression and appends it to the list of encountered
+return expressions.
+
 ## After the Function Body is Traversed
 
 After the whole function body is traversed, the `SSAConverter` is called to
