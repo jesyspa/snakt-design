@@ -175,8 +175,9 @@ function isLastIndex(node: Ref, index: Int): Bool
 ### In a method
 
 Analogous to SnaKt's existing permission system, we will inhale all relevant
-permissions before the function gets called. Note, however, that we do not
-unfold them (as we require them to be present in the function).
+permissions before the function gets called and exhale them after the function
+was called. Note, however, that we do not unfold them (as we require them to be
+present in the function).
 
 ```kotlin
 fun getLastIndex(node: Node): Int {
@@ -190,6 +191,7 @@ method getLastIndex(node: Ref) returns (res: Int)
 {
     inhale acc(purePredicate(node), wildcard)
     var len: Int := length(node)
+    exhale acc(pure_list(node), wildcard)
     res := len - 1
 }
 ```
