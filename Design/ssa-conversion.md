@@ -120,11 +120,10 @@ does the following:
 
 ## Encountering a return
 
-Upon encountering a return the `SSAConverter` is called to make note of the
-expressoin. It looks up the full condition that must be met for control-flow
-to reach this return in its current `SSABlockNode`. It then creates a pair
-of condition and return expression and appends it to the list of encountered
-return expressions.
+Upon encountering a return statement, the SSAConverter is called to record
+the expression. It looks up the full condition required for control flow
+to reach this return in the current SSABlockNode, then creates a pair consisting
+of the condition and the return expression to append to the list of encountered returns
 
 ## After the Function Body is Traversed
 
