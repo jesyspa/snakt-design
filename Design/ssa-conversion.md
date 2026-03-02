@@ -79,11 +79,13 @@ When an assignment to a source variable is encountered, the `SSAConverter`:
 
 ### Encountering a Variable Usage
 
-When a variable is used in an expression, the `SSAConverter` looks up which
-`SSAVariableName` holds the defining expression for that source variable at
-the current point in the function body via the current `SSABlockNode`.
+When a variable is used in an expression, we need to resolve the source variable
+name to the `SSAVariableName` that holds the current defining expression
+for the source variable, so that we can substitute this name into the
+variable usage. To do so, the `SSAConverter` looks up the `SSAVariableName` 
+via the current `SSABlockNode`.
 
-The `SSABlockNode` finds the name as follows:
+Analogous to the algorithm by Braun et al. the `SSABlockNode` finds the name as follows:
 - If it has a mapping for the source variable, that version is returned.
 - Otherwise, it looks up the name in its predecessor.
 
@@ -149,10 +151,6 @@ the assignments one after the other and use the correct definition
 accordingly.
 
 ## Literature
-[1] Cytron, R.; Ferrante, J.; Rosen, B. K.; Wegman, M. N.; Zadeck, F. K.
-(1991). [Efficiently computing static single assignment form and the control
-dependence graph](https://www.cs.utexas.edu/~pingali/CS380C/2010/papers/ssaCytron.pdf)
+[1] Cytron, R.; Ferrante, J.; Rosen, B. K.; Wegman, M. N.; Zadeck, F. K.(1991). [Efficientlycomputing static single assignment form and the controldependence graph](https://www.cs.utexas.edu/~pingali/CS380C/2010/papers/ssaCytron.pdf)
 
-[2] Braun, M.; Buchwald, S.; Hack, S.; Leißa, R.; Mallon, C.; Zwinkau, A.
-(2013). [Simple and Efficient Construction of Static Single Assignment Form]
-(https://c9x.me/compile/bib/braun13cc.pdf)
+[2] Braun, M.; Buchwald, S.; Hack, S.; Leißa, R.; Mallon, C.; Zwinkau, A.(2013). [Simple and Efficient Construction of Static Single Assignment Form](https://c9x.me/compile/bib/braun13cc.pdf)
