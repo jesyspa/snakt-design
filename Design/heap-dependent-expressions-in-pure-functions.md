@@ -40,12 +40,26 @@ accesses" section.
 
 ## Translation
 
-We will unfold all necessary predicates before an access. As an optimization,
-we want to keep track of previously unfolded predicates to avoid unfolding them
-again (although it is possible to do so). This ensures that there are
-sufficient permissions for all accesses made in the function. However, this
-approach comes with some limitations. To elaborate further, consider the
-following examples:
+As there is only a single expression in a pure function, we cannot simply unfold
+provided predicates from the precondition but rather need to place unfolding in
+expressions in the Viper encoding to ensure accesses are valid. We introduce a
+hybrid approach between greedily unfolding at the beginning of a function and 
+unfolding on-demand upon encountering a field access. Namely in SnaKt, after
+traversing a function body we have a list of `SSAAssignment`s as well as an overarching
+return expression. In the current encoding as a 'let chain' branch results are written
+to a dedicated variable and later another intermediate variable is introduced to
+resolve between the two branch results. Notice, that the branch results are defined
+regardless of whether or not the branch is used. Hence, we can unfold any predicate
+used in the let assignments at the beginning of the function as there will be no
+further condition that must be met in the current encoding for these predicates
+to be unfolded. Limitations of this approach will be discussed later. 
+For return expressions this is different. In the current encoding, the expression
+of the innermost let-binding is a potentially nested Ternary expression.
+Upon encountering a field access on a variable from the let-chain
+in said return expression, we unfold any further predicates necessary. Note, that these
+might be predicates already unfolded previously - hence as an optimization we might want
+to keep track of what predicates are unfolded at the beginning of the function to
+catch such cases.
 
 ### Simple field accesses
 
@@ -136,6 +150,42 @@ simplifies the problem, it has some limitations. An access to a class might only
 under certain conditions in the function, or not at all. We still require permissions for
 the pure predicate in those cases, which could potentially cause verification
 to fail even though the function is valid.
+
+Further, there is a limitation in verification capibilities arising from the fact
+that conditional assignments write results to intermediate values regardless
+of the conditoin that must be met for these to hold. Consider the following
+example:
+
+@Pure
+fun getNextValueOrDefault(node: Node): Int {
+    val defaultOrValue = if (node.next == null) {
+        -1
+    } else {
+        node.next.value
+    }
+    return defaultOrValue
+}
+```
+
+This will resolve to:
+
+```Viper
+function getNextValueOrDefault(node: Ref): Int 
+    requires acc(purePredicate(node), wildcard)
+{
+    unfolding purePredicate(node) in
+    unfolding purePredicate(node.next) in
+    let anon1 == (-1) in
+    let anon2 == (node.next.value) in
+    let anon3 == ((node.next == null) ? anon1 : anon2) in
+        anon3
+}
+```
+
+Clearly, this won't verify due to insufficient permissions to the purePredicate
+of node.next. Hence, this is a limitation of this approach. However note, that 
+the concious user can avoid this by boxing nullity checks into the return expression.
+For an example of this please note the example in 'Nested Field Accesses' above
 
 ## When the function gets used
 
