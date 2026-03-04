@@ -144,12 +144,13 @@ function length(node: Ref): Int
 
 ### Limitations
 
-Note that we are acquiring more permissions than necessary. We solely infer the
-required predicates from the function's parameters. While this approach significantly
-simplifies the problem, it has some limitations. An access to a class might only occur
-under certain conditions in the function, or not at all. We still require permissions for
-the pure predicate in those cases, which could potentially cause verification
-to fail even though the function is valid.
+Note that the granularity of the provided predicate introduces some limitations
+in verification capibilities. The predicate requires permissions to access all
+fields of a class. However, a function might only need access to one field of 
+said class. If in a verification context we can only infer permissions to access
+the one required field, on a conceptual level the verification should succeed.
+However, as the predicate requires permissions to all fields of a class the
+verification of the generated encoding will fail.
 
 Further, there is a limitation in verification capibilities arising from the fact
 that conditional assignments write results to intermediate values regardless
