@@ -298,20 +298,37 @@ fun insertSecond(@Unique @Borrowed l : LinkedList, value : Int) {
       // partially moved: none
       // fold(l)
   } else {
-      // BIG MISTAKE HERE FIX TOMORROW!!!!
       // unfolded: l
-      // paths: newNode.next, without last: newNode
-      //unfold(newNode)
-      newNode.next = firstNode
-      // written to path: newNode.next, without last: newNode
-      // unfolded paths: newNode, l
+      // paths: firstNode.next, without last: firstNode
+      unfold(firstNode)
+      var secondNode = firstNode.next
+      // written to paths: none
+      // unfolded paths: l, firstNode
+      // no common prefixes
+
+      // extracted paths: newNode.next, without last: newNode
+      // unfolded: l, firstNode
+      //unfold (newNode)
+      newNode.next = secondNode
+      // written to path: newNode.next, without first: newNode
+      // unfolded paths: newNode, l, firstNode
       // common prefix: newNode
-      // partially moved: l.head
+      // partially moved: l, firstNode
       // fold(newNode)
     
+      // extracted paths: firstNode
+      // unfolded firstNode, newNode
+      firstNode.next = newNode
+      // written to path: firstNode.next, without first: firstNode
+      // unfolded paths: firstNode, l
+      // common prefix: firstNode
+      // partially moved: l
+      // fold(firstNode)
+
+
+      // extracted path: l.head, without last: l
       // unfolded: l
-      // paths: l.head, without last: l, already unfolded
-      l.head = newNode
+      l.head = firstNode
       // written to path: l.head, without last: l
       // unfolded paths: l
       // common prefix: l
