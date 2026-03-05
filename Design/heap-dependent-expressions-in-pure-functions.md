@@ -81,9 +81,9 @@ can be found in the function's parameters. Furthermore, because the predicate
 also contains the predicates for any references within the parameters, no extra
 predicates need to be acquired to ensure that potentially nested heap accesses
 in the function body work. However, the predicate only contains the predicates
-of nested references if they are non-null (see the predicate definition above).
+of nested references if they are non-null (see the shared predicate definition above).
 We will discuss the implications of this constraint in the "Nested field
-accesses" section.
+accesses" subsection.
 
 ## Translation
 
@@ -95,11 +95,12 @@ let t2 := e2 in
 let tn := en in
     (some condition) ? r1 : ((some_other_condition) ? r2 : r3)
 
-In this encoding ei is either a linear expression or a ternary expression.
-Note however, that if ei is a ternary expressions by definition of the encoding it
+In this encoding ei is either a value (or an expression resolving to one),
+a local, a field access or a Ternary expression.
+Note however, that if ei is a Ternary expressions by definition of the encoding it
 may only have local variables (namely previously introduced let-bound variables)
-in its then or else branch. Hence, the function body expressoin
-can start with 'unfolding in' expressions unfolding all necessary predicates
+in its then or else branch. Hence, the function body
+can safely start with 'unfolding in' expressions unfolding all necessary predicates
 to grant access to all fields required in the definitions of any let-bound variable.
 The expression of the innermost let-binding is different. It is a potentially nested
 Ternary expression. ri can be any expression including field accesses on let-bound
@@ -121,7 +122,7 @@ To introduce the previously described translation we will do the following:
 this let-bound variable to be defined. Namely, while translating definitions of
 let-bound variables we will use the already existing 'hierarchyUnfoldPath' to
 determine the class information of any shared predicate that we have to unfold
-for this `SSAAssignment` to bevalid
+for this `SSAAssignment` to be valid
 - After collecting all information of the function body we will insert the
 necessary 'unfolding in' expressions directly at the field accesses in return
 expressions. As we collected the class information for all `SSAAssignemnts` we
@@ -215,9 +216,9 @@ function length(node: Ref): Int
 ### Limitations
 
 There is a severe limitation in verification capibilities arising from the fact
-that conditional assignments write results to intermediate values regardless
-of the conditoin that must be met for these to hold. Consider the following
-example:
+that conditional assignments or branches in general write results to intermediate
+values regardless of the conditoin that must be met for these to hold. Consider
+the following example:
 
 @Pure
 fun getNextValueOrDefault(node: Node): Int {
@@ -252,7 +253,7 @@ For an example of this please note the code in 'Nested Field Accesses' above
 
 ## When the function gets used
 
-There are three possible places where a function may be used: in another
+There are three possible places where a function may be used: In another
 function, in a method, or in a specification. We will detail these use cases
 below.
 
@@ -327,7 +328,7 @@ method getLastIndex(node: Ref) returns (res: Int)
 
 If a function is used in a specification, that context must also require the
 predicates from the function's precondition to ensure the specification is
-valid. If the specification is the one of a function, then the predicate will
+valid. If the specification is the part of a function, then the predicate will
 be required in the precondition by the translation methodology described above.
 If the specification is part of a method however, we must add the shared predicate
 to the precondition of said function. However, note that any caller will have the
