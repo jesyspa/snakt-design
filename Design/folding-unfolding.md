@@ -14,23 +14,19 @@
   point of the Viper encoding its unique-predicate should hold, or we should be able to obtain it after applying some
   fold/unfold. 
 
-## Predicate Context - PredCtx
-During the translation we need to keep track of the **unique** predicates which 
-were unfolded. This is done by the ``PredCtx``. It contains all the paths for which a corresponding unique predicate was unfolded.
-
 ## Fields
-Folding is closely related to field accesses. Therefore we provide an overview of all possible field accesses.
+Folding is closely related to field access. Therefore, we provide an overview of all possible field accesses.
 
 | Receiver - R | Field - F | Mutable | Access Policy          | Reading        | Writing     |
 |--------------|-----------|---------|------------------------|----------------|-------------|
 | unique       | unique    | val     | ALWAYS_READABLE        | res := R.F     | not allowed |
 | unique       | unique    | var     | BY_RECEIVER_UNIQUENESS | res := R.F     | R.F := res  |
 | unique       | shared    | val     | ALWAYS_READABLE        | res := R.F     | not allowed |
-| unique       | shared    | var     | ALWAYS_VOLATILE        | res := havoc() | removed     |
+| unique       | shared    | var     | BY_RECEIVER_UNIQUENESS | res := havoc() | removed     |
 | shared       | unique    | val     | ALWAYS_READABLE        | res := R.F     | not allowed |
 | shared       | unique    | var     | BY_RECEIVER_UNIQUENESS | res := havoc() | removed     |
 | shared       | shared    | val     | ALWAYS_READABLE        | res := R.F     | not allowed |
-| shared       | shared    | var     | ALWAYS_VOLATILE        | res := havoc() | removed     |
+| shared       | shared    | var     | BY_RECEIVER_UNIQUENESS | res := havoc() | removed     |
 
 ** for writing, when we write "removed" we mean that the write to the field itself is removed however potential side 
 effects of such a write are preserved.
@@ -39,24 +35,18 @@ effects of such a write are preserved.
 We will now go through every access policy and explain the corresponding folding mechanisms.
 
 ### ALWAYS_READABLE
-These are all immutable fields. Hence we only need to consider reading such fields.
+These are all immutable fields. Hence, we only need to consider reading such fields.
 
-To read, the shared predicate of the receiver must be unfolded.
-
-### ALWAYS_VOLATILE
-These are the fields which are mutable and annotated as shared. 
-
-Reading: No predicate must be unfolded. The value always comes from a havoc method.
-
-Writing: No predicate must be unfolded. The writing is never performed.
-
+To read, the shared predicate of the receiver must be unfolded. We do not need to fold it back, because we unfold with
+wildcard permission and can therefore unfolding as many times as we want.
 
 ### BY_RECEIVER_UNIQUENESS
-These are the fields that are mutable and annotated as unique. The state of the receiver is important.
+These are the fields that are mutable. The state of the receiver is important.
 
 **Case: Receiver is Shared**
 
-This situation is handled like the ``ALWAYS_VOLATILE`` case
+Reading: No predicate must be unfolded. The value always comes from a havoc method.
+Writing: No predicate must be unfolded. The writing is never performed.
 
 **Case: Receiver is Unique**
 
@@ -73,26 +63,29 @@ For every statement the following is performed:
     - otherwhise discard it
 2. Remove the last field of each path and make them unique.
 3. Order them increasing by the length of the path.
-4. For every prefix of every path, check if the prefix is already unfolded, otherwise add an unfold statement.
+4. For every prefix of every path, check if the prefix is partially moved, otherwise add an unfold statement.
 
 5. The actual statement is translated.
 
-6. Find the written to path, remove the last field. Take all the unfolded paths and find the common prefixes. 
-Start folding the common prefixes if they are not partially moved.
-
+6. Find the written to path, remove the last field. Check for each prefix, starting from the longest:
+  - If the prefix is not partially moved: add a fold statement for this path.
 7. If there is no written to path, then fold everything unfolded before but in reversed order.
-8. Method calls are special. For all borrowed parameters. Reverse the order of previously folded paths and fold all paths which are not partially moved.
+
+
+Note: the previous two steps could be combined by just do step 6 for every occurring path. 
+
+Note:Method calls can be handled the same way as statements.
+
 
 Branches:
 
 For if-else branches the following procedure is performed
 1. Extract the condition and consider it a statement. 
 2. Step 6 is performed at the beginning of both branches. If there is no else branch, create an "empty branch"
-3. When joining, take the intersection of the unfolded paths. (Unsure about this)
 
 Loops: 
-- Loops are much more complicated. Especially, when we have borrowed datastructures in the function.
-- Loops are disgussed in [another document](folding-unfolding-loops.md)
+- Loops are much more complicated. Especially when we have borrowed datastructures in the function.
+- Loops are discussed in [another document](folding-unfolding-while.md)
 
 #### Examples
 Consider the following class. All the fields are mutable and unique and have the same type.
@@ -116,7 +109,6 @@ A
 ````
 Example 1. Deep to Shallow
 ````kotlin
-// unfolded: {}
 // partially moved: {}
 // 1. extracted paths: {A.first.first}
 // 2. without last: {A.first}
@@ -124,27 +116,23 @@ Example 1. Deep to Shallow
 // 4. unfold (A), unfold (A.first)
 var x = A.first.first // 5.
 // 6. partially moved: {A.first}
-// 7. unfolded: {A.first}
 // 8. done, 9. done
 
 // continues
 
-// unfolded: {A.first}
 // partially moved: {A.first}
 // 1. extract paths: {A.first}
 // 2. without last: {A}
 // 3. done
-// 4. A is already unfolded (since A.first is unfolded)
+// 4. A is already unfolded (since A.first is partially moved)
 A.first = x
-// written to: A
-// unfolded: {A.first}
-// common prefixes: A
+// written to: A.first, without last: A
+// partially moved: {}
 // A is not partially moved anymore
 fold(A)
 ````
 Example 2
 ````kotlin
-// unfolded: {}
 // partially moved: {}
 // 1. extracted paths: {A.first.first}
 // 2. without last: {A.first}
@@ -152,59 +140,60 @@ Example 2
 // 4. unfold (A), unfold (A.first)
 var x = A.first.first // 5.
 // 6. partially moved: {A.first}
-// 7. unfolded: {A.first}
 // 8. done, 9. done
 
 // continues
 
-// unfolded: {A.first}
 // partially moved: {A.first}
 // 1. extract paths: {A.first, x.first}
 // 2. without last: {A, x}
 // 3. done
 // 4. unfold (x)
 A.first = x.first
+// written to: A.first, without last: A
 // partially moved: {x}
-// unfolded {A.first, x}
-// common prefix A
+// A is not partially moved anymore
 // fold(A)
 ````
 Example 3
 ````kotlin
-// unfolded: {}
 // partially moved: {}
 // 1. extracted paths: {A.first.first}
 // 2. without last: {A.first}
 // 3. done
 // 4. unfold(A) unfold(A.first)
 A.first.first = A()
-// potentially no longer moved: {A.first.first}
-// unfolded: {A.first}
-// written to: A.first
+// written to: A.first.first, without last: A.first
+// partially moved: none
 fold(A.first)
 fold(A)
 ````
 Example 4
 ````kotlin
-// unfolded: {}
 // partially moved: {}
-
-// 1. path: A.first.first, without last: A.first, unfold(A), unfold(A.first)
+// extracted path: A.first.first, without last: A.first, 
+// unfold(A), unfold(A.first)
 var x = a.first.first
 // partially moved: A.first
-// unfolded: {A.first}
-// path: A.first.second, without last: A.first, noting to unfold.
+
+
+// path: A.first.second, without last: A.first
+// since A.first is partially moved, we do not need to unfold it.
 var y = a.first.second
 // partially moved: A.first
-// unfolded: {A.first}
+// no written to path
+
 // path: A.first.first, without last: A.first, nothing to fold
+// partially moved: a.first
 a.first.first = A()
-// partially moved: A.first, nothing to unfold
+// written to: a.first.first, without last: a.first
+// partially moved: A.first, nothing to fold
+
+
 // path: A.first.second, without last: A.first, nothing to fold
 a.first.second = y
 // partially moved: none
 // path: A.first.second, without last: A.first
-// common with unfolded: A.first
 // fold(A.first)
 // fold(A)
 ````
@@ -225,13 +214,14 @@ class LinkedList(
 
 fun lengthRecursiveHelper(@Unique @Borrowed n : Node) : Int {
     // paths: n.next, without last: n, unfold(n)
-  if (n.next == null) {
-      fold(n)
+  if (n.next == null) { 
+      // fold(n)
     return 1
   } else {
     // written to path: none
     // fold(n)
-    // paths: n.next, without last: n, unfold(n)
+    
+      // paths: n.next, without last: n, unfold(n)
     return lengthRecursiveHelper(n.next) + 1
     // written to none
     // method call, n.next was borrowed, so reverse the unfolds
@@ -244,17 +234,19 @@ fun lengthRecursiveHelper(@Unique @Borrowed n : Node) : Int {
 fun lengthRecursive(@Unique @Borrowed l : LinkedList) : Int {
     // paths l.head, without last: l, unfold(l)
   if (l.head == null) {
-      // written to path: none
+      // extracted paths: l.head, without last: l
+      // partially moved: none
       // fold(l)
     return 0
   } else {
-      // written to path: none
+      // extracted paths: l.head, without last: l
+      // partially moved: none
       // fold(l)
+      
       // paths l.head, without last: l, unfold(l)
-    return lengthRecursiveHelper(l.head)
-    // is borrowed, so reverse the unfolds
-    // partially moved: none
-    // fold(l)
+      return lengthRecursiveHelper(l.head)
+      // partially moved: none
+      // fold(l)
   }
 }
 
@@ -262,21 +254,18 @@ fun lengthRecursive(@Unique @Borrowed l : LinkedList) : Int {
 fun insert(@Unique @Borrowed l : LinkedList, value : Int) {
   // no path
   @Unique var newNode = Node(null, value)
+    
+    
   // paths: newNode.next, l.head without last: newNode, l, unfold(newNode), unfold(l)
   newNode.next = l.head
-  // written to paths: newNode.next, without last: newNode
-  // unfolded paths: newNode, l
-  // common prefix: newNode
   // partially moved: l
   // fold(newNode)
   
   // paths l.head, without last: l
-  // unfolded paths: l -> nothing to do.
+  // partially moved: l
   l.head = newNode
-  // written to path: l.head, without last: l
-  // unfolded paths: l, common prefixes l
   // partially moved: none
-  fold(l)
+  // fold(l)
 }
 
 // same as `insert`
@@ -289,56 +278,50 @@ fun insertNode(@Unique @Borrowed l : LinkedList, @Unique node: Node) {
 fun insertSecond(@Unique @Borrowed l : LinkedList, value : Int) { 
   // not paths
   @Unique var newNode = Node(null, value)
+    
   // paths: l.head, without last: l
-  // unfolded paths: none
+  // partially moved: none
   // unfold(l)
   var firstNode = l.head
-  // written to paths: none
+  // partially moved: l
+  // noting to fold.
+    
   // no paths
   if (firstNode == null) {
-      // unfolded: l
+    
+      // partially moved: l
       // paths: l.head, without last: l, already unfolded
       l.head = newNode
-      // written to path: l.head, without last: l
-      // unfolded paths: l
-      // common prefix: l
+      // extracted paths: l.head, without last: l
       // partially moved: none
       // fold(l)
   } else {
-      // unfolded: l
+    
+      // partially moved: l
       // paths: firstNode.next, without last: firstNode
-      unfold(firstNode)
+      // unfold(firstNode)
       var secondNode = firstNode.next
-      // written to paths: none
-      // unfolded paths: l, firstNode
-      // no common prefixes
+      // extracted paths: firstNode.next, without last: firstNode
+      // partially moved: l, firstNode
 
       // extracted paths: newNode.next, without last: newNode
-      // unfolded: l, firstNode
-      //unfold (newNode)
+      // unfold (newNode)
       newNode.next = secondNode
-      // written to path: newNode.next, without first: newNode
-      // unfolded paths: newNode, l, firstNode
-      // common prefix: newNode
+      // extracted paths: newNode.next, without first: newNode
       // partially moved: l, firstNode
       // fold(newNode)
     
       // extracted paths: firstNode
-      // unfolded firstNode, newNode
       firstNode.next = newNode
-      // written to path: firstNode.next, without first: firstNode
-      // unfolded paths: firstNode, l
-      // common prefix: firstNode
+      // extracted paths: firstNode.next, without first: firstNode
       // partially moved: l
       // fold(firstNode)
 
 
       // extracted path: l.head, without last: l
-      // unfolded: l
+      // nothing to unfold, because l is partially moved
       l.head = firstNode
-      // written to path: l.head, without last: l
-      // unfolded paths: l
-      // common prefix: l
+      // extracted paths: l.head, without last: l
       // partially moved: none
       // fold(l)
   }
@@ -367,41 +350,31 @@ fun insertLastRecursive(@Unique @Borrowed l : LinkedList, @Unique node : Node) {
 @Unique
 fun popFirst(@Unique @Borrowed l: LinkedList) : Node? {
   // extracted paths: l.head, without last: l
-  // unfolded: none
   // unfold(l)
   @Unique var result = l.head
-  // written to path: none
-  // unfolded paths: l
-  // no common prefixes
+  // partially moved: l
   
   // no extracted paths
   if (result == null) {
+
     // extracted paths: l.head, without last: l
-    // unfolded: l
+    // partially moved: l
     l.head = result // necessary since l is borrowed.
-    // written to path: l.head, without last: l
-    // unfolded paths: l
-    // common prefix: l
     // partially moved: none
     // fold(l)
     return null
   }
   // extracted paths: l.head, result.next, without last: l, result
-  // unfolded: l
-  unfold(result)
+  // partially moved: l
+  // unfold(result)
   l.head = result.next
-  // written to path: l.head, without last: l
-  // unfolded paths: l, result
-  // common prefix: l
   // partially moved: result.next
   //fold(l)
   
-  // extracted path: result.next, withotu last: result
+  // extracted path: result.next, without last: result
   // unfolded: result
   result.next = null
   // written to path: result.next, without last: result
-  // unfolded paths: result
-  // common prefix: result
   // partially moved: none
   // fold(result)
   return result
