@@ -31,6 +31,7 @@ Folding is closely related to field accesses. Therefore we provide an overview o
 | shared       | unique    | var     | BY_RECEIVER_UNIQUENESS | res := havoc() | removed     |
 | shared       | shared    | val     | ALWAYS_READABLE        | res := R.F     | not allowed |
 | shared       | shared    | var     | ALWAYS_VOLATILE        | res := havoc() | removed     |
+
 ** for writing, when we write "removed" we mean that the write to the field itself is removed however potential side 
 effects of such a write are preserved.
 
@@ -59,15 +60,17 @@ This situation is handled like the ``ALWAYS_VOLATILE`` case
 
 **Case: Receiver is Unique**
 
+Unclear if this is actually the case:
 Both reading and writing are handled the same way. We need to handle this case earlier in the translation, because we
-need to know the full accessed path.
+need to know the full accessed path. The necessary fold and unfolds are figured out during the translation to ``ExpEmbeddings`` 
+or on a sperarate pass on the ``ExpEmbeddings``. We work on the level of statements. 
 
-The necessary fold and unfolds are figured out during the translation to ``ExpEmbeddings`` or on a sperarate pass on the 
-``ExpEmbeddings``. We work on the level of statements. For every statement the following is performed:
+For every statement the following is performed:
 1. extract the paths used in the statement. Using the results from the uniqueness checker, perform the following:
-- for every prefix of the path:
-- - if the prefix is unique, keep it.
--  - if the prefix is unique, except the last field, keep it.
+  - for every prefix of the path:
+    - if the prefix is unique, keep it.
+    - if the prefix is unique, except the last field, keep it.
+    - otherwhise discard it
 2. Remove the last field of each path and make them unique.
 3. Order them increasing by the length of the path.
 4. For every prefix of every path, check if the prefix is already unfolded, otherwise add an unfold statement.
@@ -86,6 +89,10 @@ For if-else branches the following procedure is performed
 1. Extract the condition and consider it a statement. 
 2. Step 6 is performed at the beginning of both branches. If there is no else branch, create an "empty branch"
 3. When joining, take the intersection of the unfolded paths. (Unsure about this)
+
+Loops: 
+- Loops are much more complicated. Especially, when we have borrowed datastructures in the function.
+- Loops are disgussed in [another document](folding-unfolding-loops.md)
 
 #### Examples
 Consider the following class. All the fields are mutable and unique and have the same type.
