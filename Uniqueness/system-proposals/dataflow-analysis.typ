@@ -1,3 +1,5 @@
+#title("Uniqueness Data-Flow Analysis")
+
 = Uniqueness Type Lattice
 <uniqueness-type-lattice>
 Uniqueness types describe the constraints on a path at every point in the execution of the control-flow graph:
@@ -16,8 +18,8 @@ Formally, we denote the set of types as:
 #let moved = $mono("M")$
 $ 
 & "Type" = {\
-& quad ((unique)"nique", (global)"onsumed"), ((unique)"nique", (local)"orrowed"), \
-& quad ((shared)"hared", (global)"onsumed"), ((shared)"hared", (local)"orrowed"), \
+& quad ((unique)"nique", (global)"obal"), ((unique)"nique", (local)"ocal"), \
+& quad ((shared)"hared", (global)"obal"), ((shared)"hared", (local)"ocal"), \
 & quad (moved)"oved"\
 & } 
 $
@@ -61,33 +63,36 @@ $
 #let Envout = $Env_("out")$
 For every statement $s$ we define the #emph[incoming] environment $Envin(s)$ and the #emph[outgoing] environment $Envout(s)$ satisfying the data-flow equations: 
 
-#let traverse = $italic("traverse")$
-#let pred = $italic("pred")$
+#let transfer = $italic("transfer")$
+#let pred = $italic("predecessors")$
 #let join = $italic("join")$
 $
-Envout(s) &= traverse(s) quad \
+Envout(s) &= transfer(s) quad \
 Envin(s) &= join(pred(s))
 $
-where $pred(s)$ is the set of control-flow predecessors of $s$; the function $traverse(s)$ defines the effect of each kind of statement; the function $join({p_1,...,p_n})$ combines the outgoing environments of all predecessors into a single environment that will be the incoming environment of $s$.
+where $pred(s)$ is the set of control-flow predecessors of $s$; the function $transfer(s)$ defines the effect of each kind of statement; the function $join({p_1,...,p_n})$ combines the outgoing environments of all predecessors into a single environment that will be the incoming environment of $s$.
 
-== Traverse Function
-<sec:traverse>
-The $traverse(s)$ function describes how the execution of a single statement modifies the output environment $Envout$ in relation to the input environment $Envin$.
+== Transfer Function
+<sec:transfer>
+The $transfer(s)$ function describes how the execution of a single statement modifies the output environment $Envout$ in relation to the input environment $Envin$.
 
 #let hole = $cal(E)$
 #let type = $italic("type")$
+#let default = $italic("default")$
 #let restore = $italic("restore")$
 $
-traverse(hole[x : (unique, global)]) & = Envin[x |-> moved] \
-traverse(hole[x : (unique, local)]) & = Envin[x |-> moved] \
-traverse(hole[x : (shared, global)]) & = Envin \
-traverse(hole[x : (shared, local)]) & = Envin[x |-> moved] \
-traverse(x = e) & = Envin[x |-> type(e)] \
-traverse(f(nothing)) & = Envin \
-traverse(f(e dot E)) & = restore(e) union traverse(E)
+transfer(y : (unique, global) = hole[x]) & = Envin[x |-> moved, y |-> default(y)] \ 
+transfer(y : (unique, local) = hole[x]) & = Envin[x |-> moved, y |-> default(y)] \ 
+transfer(y : (shared, global) = hole[x]) & = Envin[y |-> default(y)] \ 
+transfer(y : (shared, local) = hole[x]) & = Envin[x |-> moved, y |-> default(y)] \ 
+transfer("enter" f(... hole[x] : (unique, global) ...)) & = Envin[x |-> moved] \ 
+transfer("enter" f(... hole[x] : (unique, local) ...)) & = Envin[x |-> moved] \ 
+transfer("enter" f(... hole[x] : (shared, global) ...)) & = Envin \ 
+transfer("enter" f(... hole[x] : (shared, local) ...)) & = Envin[x |-> moved] \ 
+transfer("exit" f(... hole[x] ...)) & = Envin[x |-> default(x)] \ 
 $
 
-// TODO: Define hole, type, restore
+The $default$ function retrieves the default uniqueness type for a particular path. The evaluation context hole (denoted $hole$) abstracts over the surrounding expression, allowing us to specify the effect of evaluating a particular path $x$ at a specific value position (e.g. on the right‑hand side of an assignment) without detailing the full expression, because the uniqueness transformation depends only on the kind of operation and the type annotations of the involved paths.
 
 == Join of Predecessor Environments
 <sec:join>
@@ -95,16 +100,17 @@ Let $P = { p_1, p_2, ..., p_n }$ be the list of all predecessors of a statement 
 
 #let merge = $italic("merge")$
 $ 
-join(nothing) & = Env_1 \
+join(nothing) & = {} \
 join(p dot P) & = merge(Envout(p), join(P))
 $
 
 The auxiliary function $merge(Env_1, Env_2)$ merges the bindings of $Env_2$ into $Env_1$. For each binding $x |-> t$ in $Env_2$, if $x$ is already in $Env_1$ we replace its type by the meet of the existing type and $t$; otherwise we simply add $x |-> t$ to the accumulated result $Env_1$.
 
+#let domain = $italic("domain")$
 $ 
 merge(Env_1, nothing) & = Env_1 \
 merge(Env_1, (x |-> t) dot Env_2) & = cases(
-  merge(Env_1[x |-> (t inter Env_2[x])], Env_2) & "if " x in "dom"(R), 
+  merge(Env_1[x |-> (t inter Env_2[x])], Env_2) & "if" x in domain(R), 
   merge(Env_1[x |-> t], Env_2) & "otherwise"
 ) 
 $
