@@ -1,0 +1,38 @@
+name: Build Typst Documents
+
+on:
+  push:
+    branches: [main]
+    paths: ["**/*.typ"]
+  pull_request:
+    paths: ["**/*.typ"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Typst
+        uses: typst-community/setup-typst@v4
+
+      - name: Find and compile Typst files
+        run: |
+          mkdir -p out
+          find . -name '*.typ' -not -path './out/*' | while read -r f; do
+            dir="out/$(dirname "$f")"
+            mkdir -p "$dir"
+            typst compile "$f" "$dir/$(basename "${f%.typ}.pdf")"
+          done
+
+      - name: Create date-labelled zip
+        run: |
+          cd out
+          zip -r "../typst-build-$(date -u +%Y-%m-%d).zip" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: typst-build-${{ github.run_id }}
+          path: typst-build-*.zip
