@@ -1,278 +1,177 @@
 # Nullability
 
 Nullability is of direct interest since the Kotlin contracts allow to specify
-nullability checks (see [this KEEP][1]). Thus we need to model nullable types in
-Viper.
-
-This document presents the encoding of nullable types used in the implementation.
-An earlier version of this document discussed two possible encodings; see git
-history for the original text.
+nullability checks (see [this KEEP][1]). We need to model nullable types in
+Viper so that the verifier can reason about null safety.
 
 [1]: https://github.com/Kotlin/KEEP/blob/3490e847fe51aa6deb869654029a5a514638700e/proposals/kotlin-contracts.md
 
-## Overview
+## Approaches considered
 
-The implementation uses a **unified `Ref` type** for all Kotlin values. Every
-Kotlin value — whether `Int`, `Boolean`, a class instance, or `null` — is
-represented as a Viper `Ref`. Type information is tracked separately via a
-`RuntimeTypeDomain` that provides:
+### Parametric `Nullable[T]` domain
 
-- A `RuntimeType` domain with subtyping (`isSubtype`), type-of (`typeOf`), and
-  nullability (`nullable`) functions.
-- A special `nullValue()` constant of type `Ref`.
-- Injection functions to convert between Viper primitive types and `Ref` (e.g.
-  `intToRef`/`intFromRef`).
-
-This avoids the complications of the originally proposed `Nullable[T]` parametric
-domain (boxing primitives, reasoning about permissions) and unifies nullable and
-non-nullable types into a single representation.
-
-## RuntimeTypeDomain
-
-The domain is defined in
-`SnaKt/formver.compiler-plugin/core/.../domains/RuntimeTypeDomain.kt`.
-
-### Core functions
+The first approach considered was a parametric Viper domain that wraps values:
 
 ```viper
-domain RuntimeType {
-    function isSubtype(t1: RuntimeType, t2: RuntimeType): Bool
-    function typeOf(r: Ref): RuntimeType
-    function nullable(t: RuntimeType): RuntimeType
+domain Nullable[T] {
+    function null_val(): Nullable[T]
+    function nullable_of(val: T): Nullable[T]
+    function val_of_nullable(x: Nullable[T]): T
 
-    function nullValue(): Ref
-    function unitValue(): Ref
-
-    unique function intType(): RuntimeType
-    unique function boolType(): RuntimeType
-    unique function charType(): RuntimeType
-    unique function stringType(): RuntimeType
-    unique function unitType(): RuntimeType
-    unique function nothingType(): RuntimeType
-    unique function anyType(): RuntimeType
-    unique function functionType(): RuntimeType
-    // unique function *Type(): RuntimeType  — one per user-defined class
+    axiom some_not_null {
+        forall x: T :: nullable_of(x) != null_val()
+    }
+    axiom val_of_nullable_of_val {
+        forall x: T :: val_of_nullable(nullable_of(x)) == x
+    }
+    axiom nullable_of_val_of_nullable {
+        forall x: Nullable[T] ::
+            x != null_val() ==> nullable_of(val_of_nullable(x)) == x
+    }
 }
 ```
 
-### Key axioms
+This gives a clean separation: `T` is the non-nullable type, `Nullable[T]` is
+the nullable wrapper, and `nullable_of`/`val_of_nullable` convert between them.
 
-**Subtyping** is a partial order (reflexive, transitive, antisymmetric):
+Drawbacks:
+- **Primitive boxing**: `Int` has no null value in Viper, so `Int?` would need
+  heap boxing. Passing `Int?` as a parameter then requires cloning to avoid
+  aliasing side effects.
+- **Permission reasoning**: accessing the wrapped value requires heap
+  permissions, adding complexity we want to avoid.
+- **Explicit conversion**: every nullable-to-non-nullable transition needs an
+  explicit `val_of_nullable` call, and vice versa.
+
+A prototype of this approach exists in `Domains/Nullable.vpr` (with a companion
+`Casting` domain for type conversions).
+
+### Built-in Viper `null`
+
+A simpler alternative: use Viper's built-in `null` reference directly. A
+function `null_check(x: Any?): Boolean` would translate to:
 
 ```viper
-axiom subtype_reflexive { forall t :: isSubtype(t, t) }
-axiom subtype_transitive {
-    forall t1, t2, t3 ::
-        isSubtype(t1, t2) && isSubtype(t2, t3) ==> isSubtype(t1, t3)
-}
-axiom subtype_antisymmetric {
-    forall t1, t2 ::
-        isSubtype(t1, t2) && isSubtype(t2, t1) ==> t1 == t2
+method null_check(x: Ref) returns (ret: Bool)
+    requires x != null ==> acc(x.val)
+    ensures ret <==> x != null
+```
+
+Drawbacks:
+- Requires permission reasoning for field access behind null checks.
+- Primitives still need boxing onto the heap.
+- Conflates Viper's `null` (a `Ref` value) with Kotlin's `null` (a value in
+  any nullable type).
+
+### Unified `Ref` with runtime type tracking (chosen)
+
+The approach adopted is to represent **all** Kotlin values as Viper `Ref`, with
+type information tracked through the [runtime type domain](runtime-type-domain.md).
+Nullable types are handled by a `nullable(t)` type wrapper in the domain,
+rather than by wrapping values.
+
+A nullable parameter `x: Int?` is encoded as:
+
+```viper
+method f(p$x: Ref) returns (ret$0: Ref)
+{
+    inhale df$rt$isSubtype(df$rt$typeOf(p$x), df$rt$nullable(df$rt$intType()))
+    ...
 }
 ```
 
-**Nullable type** properties:
+The value `p$x` is just a `Ref`. The `inhale` establishes that its runtime type
+is a subtype of `Int?`. No boxing, no permissions, no wrapper types.
+
+Advantages over the alternatives:
+- No boxing/unboxing for primitives — injection functions (`intToRef`/`intFromRef`)
+  handle the Viper-level representation transparently.
+- No permission reasoning for null checks — everything is value-level.
+- Smart casts fall out of axioms rather than requiring explicit conversions.
+- Nullable and non-nullable types share the same Viper type (`Ref`), so
+  parameter passing, assignment, and comparison work uniformly.
+
+## How nullability works
+
+### Null literal
+
+`null` in Kotlin becomes `df$rt$nullValue()`, a domain function returning `Ref`.
+Its type is `Nothing?`:
 
 ```viper
-// Wrapping is idempotent: Int?? is the same as Int?
-axiom nullable_idempotent {
-    forall t :: nullable(nullable(t)) == nullable(t)
-}
-
-// Non-nullable is a subtype of nullable
-axiom nullable_supertype {
-    forall t :: isSubtype(t, nullable(t))
-}
-
-// Subtyping lifts through nullable
-axiom nullable_preserves_subtype {
-    forall t1, t2 :: isSubtype(t1, t2) ==> isSubtype(nullable(t1), nullable(t2))
-}
-
-// Any? is the top type
-axiom nullable_any_supertype {
-    forall t :: isSubtype(t, nullable(anyType()))
-}
-
-// Nullable types are NOT subtypes of Any (this separates null from non-null)
-axiom any_not_nullable_type_level {
-    forall t :: !isSubtype(nullable(t), anyType())
-}
+axiom type_of_null { isSubtype(typeOf(nullValue()), nullable(nothingType())) }
 ```
 
-**Null value** axioms:
+Since `Nothing?` is a subtype of every nullable type (via `nullable_preserves_subtype`
+and `supertype_of_nothing`), `null` can be assigned to any `T?` variable.
+
+### Null checks
+
+`x == null` becomes `p$x == df$rt$nullValue()`. This is plain reference equality
+in Viper — no unwrapping needed.
+
+### Smart casts
+
+When a null check like `if (x != null)` guards a branch, the Kotlin compiler
+produces a `FirSmartCastExpression` that narrows `T?` to `T`. The plugin
+translates this as a no-op `Cast` (just changes the type annotation). The
+verifier can prove the narrowing via the `null_smartcast_value_level` axiom:
 
 ```viper
-// null has type Nothing?
-axiom type_of_null {
-    isSubtype(typeOf(nullValue()), nullable(nothingType()))
-}
-
-// null is not a subtype of Any (value level)
-axiom any_not_nullable_value_level {
-    !isSubtype(typeOf(nullValue()), anyType())
-}
-```
-
-**Smart cast** axioms (these are what enable null-check reasoning):
-
-```viper
-// Value-level: if r has nullable type T?, then r is null or r has type T
+// If r has type T?, then either r is null or r has type T
 axiom null_smartcast_value_level {
     forall r: Ref, t: RuntimeType ::
         isSubtype(typeOf(r), nullable(t)) ==>
         r == nullValue() || isSubtype(typeOf(r), t)
 }
-
-// Type-level: if t1 is a non-nullable type (subtype of Any) and also
-// subtype of T?, then t1 is a subtype of T
-axiom null_smartcast_type_level {
-    forall t1, t2 ::
-        isSubtype(t1, anyType()) && isSubtype(t1, nullable(t2)) ==>
-        isSubtype(t1, t2)
-}
 ```
 
-**Other structural axioms:**
+In the non-null branch, the solver knows `r != nullValue()`, so it concludes
+`isSubtype(typeOf(r), t)` — the smart cast holds.
+
+### Nullable type invariants
+
+When a type is nullable, its invariants (e.g. class predicate access) are
+wrapped with an implication: the invariant only applies when the value is
+non-null. For example, a `Foo?` parameter inhales:
 
 ```viper
-// Nothing has no inhabitants
-axiom nothing_empty { forall r :: !isSubtype(typeOf(r), nothingType()) }
-
-// Nothing is a subtype of every type (bottom type)
-axiom supertype_of_nothing { forall t :: isSubtype(nothingType(), t) }
-
-// Unit has exactly one value
-axiom type_of_unit { isSubtype(typeOf(unitValue()), unitType()) }
-axiom uniqueness_of_unit {
-    forall r :: isSubtype(typeOf(r), unitType()) ==> r == unitValue()
-}
+inhale p$foo != df$rt$nullValue() ==> acc(p$c$Foo$shared(p$foo), wildcard)
 ```
 
-## Injection functions
+### Elvis operator (`?:`)
 
-Since all values are `Ref`, primitive types need injection/projection functions
-to convert between their Viper-native type and `Ref`. These are defined in
-`SnaKt/formver.compiler-plugin/core/.../domains/Injection.kt`.
-
-Each injection (e.g. for `Int`) provides:
-
-```viper
-function intToRef(v: Int): Ref
-function intFromRef(r: Ref): Int
-```
-
-With three axioms guaranteeing a bijection:
-
-```viper
-// Type preservation
-axiom { forall v: Int :: isSubtype(typeOf(intToRef(v)), intType()) }
-
-// Round-trip: native → Ref → native
-axiom { forall v: Int :: intFromRef(intToRef(v)) == v }
-
-// Round-trip: Ref → native → Ref (when type matches)
-axiom {
-    forall r: Ref ::
-        isSubtype(typeOf(r), intType()) ==> intToRef(intFromRef(r)) == r
-}
-```
-
-The same pattern applies to `Bool`, `Char` (represented as `Int` in Viper), and
-`String` (represented as `Seq[Int]`).
-
-Arithmetic and other operations on `Ref` are implemented as
-`InjectionImageFunction`s that unwrap arguments, apply the native Viper
-operation, and re-wrap the result.
-
-## Compiler-side representation
-
-In the compiler plugin, nullable types are represented by `TypeEmbedding`:
-
-```kotlin
-data class TypeEmbedding(val pretype: PretypeEmbedding, val flags: TypeEmbeddingFlags)
-data class TypeEmbeddingFlags(val nullable: Boolean)
-```
-
-- `getNullable()` returns a copy with `nullable = true`.
-- `getNonNullable()` returns a copy with `nullable = false`.
-- `flags.adjustRuntimeType(runtimeType)` wraps with `nullable(...)` when the
-  flag is set.
-
-Type invariants for nullable types are wrapped with `IfNonNullInvariant`, which
-generates `(exp != nullValue()) ==> invariant(exp)`. This ensures that
-invariants (e.g. class predicate access) are only required when the value is
-non-null.
-
-## Null literal
-
-The `null` literal is represented as `NullLit` with type `Nothing?`:
-
-```kotlin
-data object NullLit : LiteralEmbedding {
-    override val type = buildType { isNullable = true; nothing() }
-    override fun toViper(ctx) = RuntimeTypeDomain.nullValue(...)
-}
-```
-
-In Viper output: `df$rt$nullValue()`.
-
-## Null checks and smart casts
-
-A null comparison `x == null` becomes `p$x == df$rt$nullValue()`. When this
-comparison appears as a condition in `if` or `when`, the Kotlin compiler produces
-a `FirSmartCastExpression` in the non-null branch.
-
-The plugin handles smart casts in `StmtConversionVisitor.visitSmartCastExpression`:
-
-- If the smart cast is from `T?` to `T` (only nullability changes), it produces
-  a simple `Cast` that changes the type without emitting Viper code.
-- If the smart cast changes the base type (e.g. `Any` to `Foo`), it inhales
-  the invariants of the new type.
-
-The SMT solver can then prove that in the non-null branch, `x != nullValue()`,
-and the `null_smartcast_value_level` axiom gives `isSubtype(typeOf(x), T)`.
-
-## Elvis operator (`?:`)
-
-`x ?: default` is translated to:
+`x ?: default` becomes a conditional on whether `x` is null:
 
 ```viper
 if (p$x != df$rt$nullValue()) {
-    ret := p$x
+    ret$0 := p$x
 } else {
-    ret := <default>
+    ret$0 := <default>
 }
 ```
 
-This is implemented as an `Elvis` embedding that wraps the left operand in a
-null check via `notNullCmp()`.
+The special case `x ?: return e` (early return in the null branch) is also
+supported.
 
-The special case `x ?: return e` (elvis with early return) is also supported:
-the right branch produces a return statement instead of an expression.
+### Safe call operator (`?.`)
 
-## Safe call operator (`?.`)
-
-`x?.method()` is translated to:
+`x?.method()` becomes:
 
 ```viper
 if (p$x != df$rt$nullValue()) {
-    ret := method(p$x)
+    ret$0 := method(p$x)
 } else {
-    ret := df$rt$nullValue()
+    ret$0 := df$rt$nullValue()
 }
 ```
 
-The receiver is evaluated once using a `share()` mechanism to prevent
-double-evaluation of side-effectful expressions. The result type is the nullable
-version of the method's return type.
-
-Safe call chains like `a?.b()?.c()` nest: each `?.` produces an `if` with the
-next `?.` in the non-null branch.
+The receiver is evaluated once via a sharing mechanism to prevent
+double-evaluation. Safe call chains (`a?.b()?.c()`) nest naturally.
 
 ## Examples
 
-### Null check with smart cast
+### Smart cast after null check
 
 ```kotlin
 fun smartcastReturn(n: Int?): Int =
@@ -292,12 +191,14 @@ method f$smartcastReturn$TF$NT$Int(p$n: Ref) returns (ret$0: Ref)
 }
 ```
 
+Note that `p$n` is used directly as `ret$0` in the non-null branch — no
+unwrapping call. The postcondition `isSubtype(typeOf(ret$0), intType())` is
+proven by the solver using `null_smartcast_value_level`.
+
 ### Elvis operator
 
 ```kotlin
-fun elvisOperator(x: Int?): Int {
-    return x ?: 3
-}
+fun elvisOperator(x: Int?): Int = x ?: 3
 ```
 
 ```viper
@@ -336,29 +237,5 @@ method f$testSafeCall$TF$NT$Foo(p$foo: Ref) returns (ret$0: Ref)
 }
 ```
 
-### Nullable parameter passing
-
-```kotlin
-fun passNullableParameter(x: Int?): Int? {
-    useNullableTwice(x)
-    return x
-}
-```
-
-```viper
-method f$passNullableParameter$TF$NT$Int(p$x: Ref) returns (ret$0: Ref)
-    ensures df$rt$isSubtype(df$rt$typeOf(ret$0), df$rt$nullable(df$rt$intType()))
-{
-    inhale df$rt$isSubtype(df$rt$typeOf(p$x), df$rt$nullable(df$rt$intType()))
-    var anon$0: Ref
-    anon$0 := f$useNullableTwice$TF$NT$Int(p$x)
-    ret$0 := p$x
-}
-```
-
-## Open questions
-
-- **Nullable type aliases**: Cases like `typealias T = Int?; typealias S = T?`
-  are handled by `nullable_idempotent` but haven't been tested explicitly.
-- **Not-null assertion (`!!`)**: The implementation status of this operator
-  should be verified.
+Note the guarded `inhale` for the class predicate — it only applies when
+`p$foo` is non-null.
