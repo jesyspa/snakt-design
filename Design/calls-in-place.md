@@ -30,14 +30,29 @@ where function objects are currently represented as havoc'd references (see
 
 ## Intended encoding
 
-We can model objects of function type as references with an associated
-`num_calls` field that is incremented every time the function object is invoked.
-See [functions-as-parameters](functions-as-parameters.md) for the full encoding.
+Since we trust the `callsInPlace` declaration, the encoding does not need to
+track or verify invocation counts. Instead, we assume the declared guarantees
+at the call site.
 
-Note: the encoding below is designed to _assume_ the declared invocation
-guarantees in calling code, not to verify the callee's implementation.
+For `EXACTLY_ONCE`, the caller can assume:
+- The lambda body executes exactly once.
+- Variables assigned in the lambda are definitely assigned after the call.
+- Side effects of the lambda occur exactly once.
+
+For `AT_LEAST_ONCE` and `AT_MOST_ONCE`, weaker assumptions apply accordingly.
+
+The main challenge is encoding this for non-inline functions, where the lambda
+body is not substituted into the caller. We need a function object encoding
+that lets the caller assume the effects of the lambda body have been applied
+the declared number of times. See
+[functions-as-parameters](functions-as-parameters.md) for the function object
+encoding.
 
 ### Escape tracking
+
+The non-escape guarantee (property 1) means the function object is not stored
+past the call. This is relevant for ownership and permission reasoning: the
+caller retains full ownership of any captured state.
 
 Instead of marking objects that may not escape, we can mark objects that _may_
 escape, treating that as a precondition for calling functions from which escape
@@ -52,47 +67,6 @@ We need to choose what types do and do not require escape permissions:
 
 Option 1 is likely a better trade-off as real-life examples don't generally
 involve casting function objects.
-
-### Invocation counting
-
-The calls to `fo` should be tracked via a counter to allow us to determine
-the number of times it is called. We track this using a counter on the
-function object:
-
-```viper
-field FunctionObject_num_calls: Int
-predicate FunctionObject(this: Ref) {
-  acc(this.FunctionObject_num_calls)
-}
-
-method invokeFunctionObject(this: Ref)
-  requires FunctionObject(this)
-  ensures FunctionObject(this)
-  ensures FunctionObject_get_num_calls(this) == old(FunctionObject_get_num_calls(this)) + 1
-```
-
-The invocation kind maps to postconditions on the counter:
-- `EXACTLY_ONCE`: `num_calls == old(num_calls) + 1`
-- `AT_LEAST_ONCE`: `num_calls >= old(num_calls) + 1`
-- `AT_MOST_ONCE`: `num_calls <= old(num_calls) + 1`
-
-A non-obvious difficulty is that the counter is monotonically increasing,
-which we need to specify at all points (e.g. loop invariants).
-
-### Partial correctness caveat
-
-Due to the partial correctness property of Viper, a false negative occurs in:
-
-```kotlin
-fun foo(fo: () -> Unit) {
-    contract { callsInPlace(fo, EXACTLY_ONCE) }
-    while (true) {}
-}
-```
-
-We could partially mitigate this by ending the function with `refute false`,
-which would ensure that Viper cannot verify that `foo` does not terminate.
-However, short of requiring a termination proof we cannot avoid this entirely.
 
 ## Function object encoding
 
@@ -116,8 +90,8 @@ This means:
 - Any property that the function object is supposed to establish must be
   assumed rather than verified.
 
-Creating actual function objects (with predicate, counter, and parameter
-passing) is blocked on the TODO in `LambdaExp.toViperStoringIn`.
+Creating actual function objects (with predicate and parameter passing) is
+blocked on the TODO in `LambdaExp.toViperStoringIn`.
 
 ## What works today
 
