@@ -83,7 +83,7 @@ $
 === Evaluation Context
 
 #let hole = $cal(E)$
-Note that for each statement and expression in the program there may be multiple control-flow nodes. To enable a finer-grained description of the current execution step we rely on the notion of evaluation hole denoted as $hole$. A hole pattern takes as input a pattern matching the expression that is currently being evaluated using the form $hole[Expression]$. For example, consider the assignment:
+Note that for each statement and expression in the program there may be multiple control-flow nodes. To enable a finer-grained description of the current execution step we rely on the notion of evaluation hole denoted as $hole$. A hole pattern takes as input a pattern matching the expression that is currently being evaluated using the form $hole[Expression]$. This pattern allow us to match control-flow nodes while also referencing the context. For example, consider the assignment:
 $
 v = m(f(x, y, z))
 $
