@@ -99,7 +99,10 @@ A type environment $Env$ is a partial map from paths to types:
 $ 
 Env : Path -> Type
 $
-We write $Env[x]$ for retrieving the type of path $x$ in $Env$, and $Env[x |-> t]$ to produce a copy of the environment associating $x$ to $t$. Assigning a parent path to $moved$ automatically moves the $subpaths$ as well, enforcing the following property:
+/ To read an element of the environment: we write $Env[x]$ for retrieving the type of path $x$ in $Env$. 
+/ To update an element of the environment : we write $Env[x |-> t]$, which produces a copy of the environment $Env$ associating the path $x$ to type $t$. 
+
+Assigning a parent path to $moved$ automatically moves the $subpaths$ as well, maintaining the property:
 $
 Env[x] = moved => Env[x...f] = moved "for" x...f in subpaths(x)
 $
