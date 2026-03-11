@@ -149,7 +149,6 @@ transfer("exit" f(... hole[x] ...)) & = Envin[x |-> default(x)] \
 $
 where:
 - The pattern $x : t$ matches a path $x$ that satisfies the uniqueness type $t$.
-- The value-context hole $hole$ abstracts over the surrounding evaluation context, allowing us to specify a variable reference $x$ at a specific value position without detailing the full expression. In particular, the pattern $y = hole[x]$ specifies a variable node $x$ that may be assigned to a variable $y$; the pattern $f(... hole[x] ...)$ specifies a variable node $x$ that is passed as an argument to the function $f$. 
 
 == Join of Predecessor Environments
 <sec:join>
