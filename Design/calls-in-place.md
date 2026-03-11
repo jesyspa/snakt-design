@@ -7,6 +7,15 @@ guarantees two properties:
 2. (Optionally) `fo` is called a specific number of times: once, at least once,
    or at most once.
 
+## Scope
+
+Verifying the _correctness_ of `callsInPlace` declarations is a non-goal for
+this project. That is, we do not check that a function's implementation actually
+calls `fo` the declared number of times. Instead, the goal is to _use_
+`callsInPlace` information to improve verification of calling code — for
+example, knowing that a lambda is called exactly once lets us reason about
+definite assignment and variable initialization in the caller.
+
 ## Implementation status
 
 **`callsInPlace` is currently not encoded.** The contract visitor recognises
@@ -24,6 +33,9 @@ where function objects are currently represented as havoc'd references (see
 We can model objects of function type as references with an associated
 `num_calls` field that is incremented every time the function object is invoked.
 See [functions-as-parameters](functions-as-parameters.md) for the full encoding.
+
+Note: the encoding below is designed to _assume_ the declared invocation
+guarantees in calling code, not to verify the callee's implementation.
 
 ### Escape tracking
 
