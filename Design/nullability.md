@@ -6,69 +6,13 @@ Viper so that the verifier can reason about null safety.
 
 [1]: https://github.com/Kotlin/KEEP/blob/3490e847fe51aa6deb869654029a5a514638700e/proposals/kotlin-contracts.md
 
-## Approaches considered
+## Encoding
 
-### Parametric `Nullable[T]` domain
-
-The first approach considered was a parametric Viper domain that wraps values:
-
-```viper
-domain Nullable[T] {
-    function null_val(): Nullable[T]
-    function nullable_of(val: T): Nullable[T]
-    function val_of_nullable(x: Nullable[T]): T
-
-    axiom some_not_null {
-        forall x: T :: nullable_of(x) != null_val()
-    }
-    axiom val_of_nullable_of_val {
-        forall x: T :: val_of_nullable(nullable_of(x)) == x
-    }
-    axiom nullable_of_val_of_nullable {
-        forall x: Nullable[T] ::
-            x != null_val() ==> nullable_of(val_of_nullable(x)) == x
-    }
-}
-```
-
-This gives a clean separation: `T` is the non-nullable type, `Nullable[T]` is
-the nullable wrapper, and `nullable_of`/`val_of_nullable` convert between them.
-
-Drawbacks:
-- **Primitive boxing**: `Int` has no null value in Viper, so `Int?` would need
-  heap boxing. Passing `Int?` as a parameter then requires cloning to avoid
-  aliasing side effects.
-- **Permission reasoning**: accessing the wrapped value requires heap
-  permissions, adding complexity we want to avoid.
-- **Explicit conversion**: every nullable-to-non-nullable transition needs an
-  explicit `val_of_nullable` call, and vice versa.
-
-A prototype of this approach exists in `Domains/Nullable.vpr` (with a companion
-`Casting` domain for type conversions).
-
-### Built-in Viper `null`
-
-A simpler alternative: use Viper's built-in `null` reference directly. A
-function `null_check(x: Any?): Boolean` would translate to:
-
-```viper
-method null_check(x: Ref) returns (ret: Bool)
-    requires x != null ==> acc(x.val)
-    ensures ret <==> x != null
-```
-
-Drawbacks:
-- Requires permission reasoning for field access behind null checks.
-- Primitives still need boxing onto the heap.
-- Conflates Viper's `null` (a `Ref` value) with Kotlin's `null` (a value in
-  any nullable type).
-
-### Unified `Ref` with runtime type tracking (chosen)
-
-The approach adopted is to represent **all** Kotlin values as Viper `Ref`, with
-type information tracked through the [runtime type domain](runtime-type-domain.md).
-Nullable types are handled by a `nullable(t)` type wrapper in the domain,
-rather than by wrapping values.
+All Kotlin values are represented as Viper `Ref`, with type information tracked
+through the [runtime type domain](runtime-type-domain.md). Nullability is
+handled at the type level: a `nullable(t)` wrapper in the domain marks types
+that admit null, and `nullValue()` is a distinguished domain constant
+representing null.
 
 A nullable parameter `x: Int?` is encoded as:
 
@@ -83,13 +27,56 @@ method f(p$x: Ref) returns (ret$0: Ref)
 The value `p$x` is just a `Ref`. The `inhale` establishes that its runtime type
 is a subtype of `Int?`. No boxing, no permissions, no wrapper types.
 
-Advantages over the alternatives:
-- No boxing/unboxing for primitives — injection functions (`intToRef`/`intFromRef`)
-  handle the Viper-level representation transparently.
-- No permission reasoning for null checks — everything is value-level.
-- Smart casts fall out of axioms rather than requiring explicit conversions.
-- Nullable and non-nullable types share the same Viper type (`Ref`), so
-  parameter passing, assignment, and comparison work uniformly.
+Note that `nullValue()` is a domain function, not Viper's built-in `null`. We
+do not use Viper's `null` — all null comparisons and null literals compile to
+`df$rt$nullValue()`.
+
+### Early alternatives
+
+Two alternative approaches were considered early in the project:
+
+1. **Parametric `Nullable[T]` domain**: wrap nullable values in a `Nullable[T]`
+   domain with `nullable_of`/`val_of_nullable` conversion functions. Rejected
+   because it requires boxing primitives onto the heap and permission reasoning
+   for field access. A prototype exists in `Domains/Nullable.vpr`.
+
+2. **Built-in Viper `null`**: use `null` as a `Ref` value directly. Rejected
+   because it conflates Viper's `null` (a `Ref` value) with Kotlin's `null`
+   (which can appear in any nullable type, including `Int?`), and still requires
+   boxing and permission reasoning.
+
+The chosen approach avoids both problems: `nullValue()` is a distinguished `Ref`
+constant in the domain, and the `nullable(t)` type wrapper handles subtyping
+without wrapping values.
+
+## Pretypes and types
+
+In the compiler plugin, nullability is separated into two layers:
+
+- A **pretype** (`PretypeEmbedding`) represents a Kotlin type without
+  nullability (or other flags). For example, `Int`, `Boolean`, `Foo`,
+  `(Int) -> Int` are all pretypes. Pretypes determine the structure of the
+  Viper encoding: injection functions, class predicates, field access, etc.
+
+- A **type** (`TypeEmbedding`) pairs a pretype with `TypeEmbeddingFlags`,
+  which currently contains a single `nullable` flag. The type determines the
+  full Viper encoding: runtime type assertions include `nullable()` when the
+  flag is set, and type invariants are wrapped with a non-null guard.
+
+This separation is intentional and enforced: `PretypeEmbedding` is not a subtype
+of `TypeEmbedding`, preventing one from being used where the other is expected.
+A pretype can be promoted to a type via `asTypeEmbedding()` (non-nullable) or
+`asNullableTypeEmbedding()`.
+
+The flags affect two things:
+
+1. **Runtime type**: `TypeEmbeddingFlags.adjustRuntimeType` wraps the pretype's
+   runtime type with `nullable()` when the flag is set.
+
+2. **Type invariants**: `TypeEmbeddingFlags.adjustInvariant` wraps invariants
+   with `IfNonNullInvariant`, adding `exp != nullValue() ==> invariant`. This
+   ensures class predicates and other invariants only apply when the value is
+   non-null.
 
 ## How nullability works
 
