@@ -145,7 +145,6 @@ transfer(n) = Envin \
 transfer(y  = hole[x : (unique, \_)]) & = Envin[x |-> moved] union {y.f |-> Envin[x...f] | x...f in subpaths(x)} \
 transfer(y = \_) & = Envin[y |-> default(y)] \
 transfer("enter" f(... hole[x : (unique, \_)] ...)) & = Envin[x |-> moved] \ 
-transfer("enter" f(... hole[x : (\_, local)] ...)) & = Envin[x |-> moved] \ 
 transfer("exit" f(... hole[x] ...)) & = Envin[x |-> default(x)] \
 $
 where:
