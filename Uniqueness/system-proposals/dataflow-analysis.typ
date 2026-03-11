@@ -1,30 +1,51 @@
 #title("Uniqueness Data-Flow Analysis")
 
-= Uniqueness Type Lattice
+= Syntax Definition
+<syntax>
+
+We assume to be operating on a standard Kotlin CFG as provided by:
+```kotlin
+package org.jetbrains.kotlin.fir.resolve.dfa.cfg
+```
+Any program-level syntax reported in the following sections has a correspondent `CFGNode<*>` class within this package.
+
+== Paths
+<paths>
+Paths are syntactical units representing variable locations and field locations. The syntax can be described as a list of symbols:
+#let Symbol = $italic("Symbol")$
+#let Path = $italic("Path")$
+$
+Symbol & ::= x | y | z | ... \
+Path & ::= Symbol | Symbol . Path
+$
+A component of the path can be any name that is not already used by the language. A single-component path represents a local variable, while a multiple-components path represents a field access.
+#let subpaths = $italic("subpaths")$
+We use the function $subpaths(x...f)$ to retrieve the subcomponents of a path $x$.
+
+== Uniqueness Types
 <uniqueness-type-lattice>
-Uniqueness types describe the constraints on a path at every point in the execution of the control-flow graph:
+#let UniqueLevel = $italic("Unique-Level")$
+#let BorrowLevel = $italic("Borrow-Level")$
+Uniqueness types describe the constraints on the shareability of a path at any given point in the execution of the control-flow graph. Informally, the uniqueness of a path is characterized by:
+/ The aliasing status of the path : described by $UniqueLevel$. If a path is #emph[unique] no other alias of that path can exist. If a path is #emph[shared] it may have been aliased by another path. 
+/ The ability to alias the path : described by $BorrowLevel$. If a path is #emph[local] it cannot be aliased further outside of the current function. If a path is #emph[global] it may be assigned elsewhere.
 
-- if the path is #emph[unique] no other alias must exist, whereas if it is #emph[shared] it may be aliased;
+Additionally the type lattice contains a top element #emph[moved] that denotes a unique path which has been moved to another path. After a unique path has been moved (assigned) to a unique variable. it can no longer be used or aliased, enforcing the invariant of the second variable.
 
-- if the path is #emph[local] we must ensure that it is not aliased further by the current function, if it is #emph[global] we can assign it elsewhere.
-
-Additionally the lattice contains a top element #emph[moved] that denotes a unique path which has been moved, and hence cannot be used.
-
-Formally, we denote the set of types as:
+We denote the set of possible types of a path as:
+#let Type = $italic("Type")$
 #let unique = $mono("U")$
 #let shared = $mono("S")$
 #let global = $mono("G")$
 #let local = $mono("L")$
 #let moved = $mono("M")$
 $ 
-& "Type" = {\
-& quad ((unique)"nique", (global)"obal"), ((unique)"nique", (local)"ocal"), \
-& quad ((shared)"hared", (global)"obal"), ((shared)"hared", (local)"ocal"), \
-& quad (moved)"oved"\
-& } 
+Type & ::= (UniqueLevel, BorrowLevel) | (moved)"oved" \
+UniqueLevel & ::= (unique)"nique" | (shared)"hared" \
+BorrowLevel & ::= (global)"lobal" | (local)"ocal"
 $
 
-The partial order $subset.eq$ is defined by the following relations (all transitive closures are implied):
+The partial order $subset.eq$ is defined by the following relations:
 $ 
 (unique, global) & subset.eq (unique, local) \
 (shared, global) & subset.eq (shared, local) \
@@ -33,28 +54,55 @@ $
 (shared, local) & subset.eq moved 
 $
 
-The greatest lower bound (meet) $inter$ and least upper bound (join) $union.sq$ are derived from this order.
+The transitive closure of $subset.eq$, the greatest lower bound (meet) $inter$, and least upper bound (join) $union$ follow from this order.
 
-= Type Environment
+#let default = $italic("default")$
+
+== Control-Flow Nodes
+We assume to be operating on a generic Kotlin control-flow graph representing the body of a function declaration.
+#let fun = $mono("fun")$
+#let successors = $italic("successors")$
+#let predecessors = $italic("predecessors")$
+Every node $n$ of the graph has a set of $successors(n)$ representing the nodes that execute immediately after $n$, as well as a set $predecessors(n)$ representing the set of nodes executing immediately before $n$. To designate a node in the control-flow graph we will use the high-level expressions and statements to which it corresponds. The constructs that are relevant to this analysis are the following:
+#let Declaration = $italic("Declaration")$
+#let Expression = $italic("Expression")$
+#let Statement = $italic("Statement")$
+#let Call = $italic("Call")$
+#let CallTail = $italic("Call-Tail")$
+#let Assignment = $italic("Assignment")$
+#let Parameter = $italic("Parameter")$
+$
+Declaration & ::= fun Path( Parameter... ) { Statement... } \
+Parameter & ::= Path: Type \
+Expression & ::= Path | Call | * \
+Statement & ::= Assignment | Call | * \
+Call & ::= Path(Expression...) \
+Assignment & ::= Path = Expression
+$
+
+=== Evaluation Context
+
+#let hole = $cal(E)$
+Note that for each statement and expression in the program there may be multiple control-flow nodes. To enable a finer-grained description of the current execution step we rely on the notion of evaluation hole denoted as $hole$. A hole pattern takes as input a pattern matching the expression that is currently being evaluated using the form $hole[Expression]$. For example, consider the assignment:
+$
+v = m(f(x, y, z))
+$
+
+Then the pattern $v = hole[Expression]$ matches the following control-flow nodes preserving the evaluation order $->$:
+$
+v = hole[x] -> v = hole[y] -> v = hole[z] -> v = hole[f(x, y, z)] -> v = hole[m(f(x, y, z))]
+$
+
+== Uniqueness Typing Environment
 <type-environment>
 #let Env = $cal(U)$
 A type environment $Env$ is a partial map from paths to types:
-#let Path = $italic("Path")$
-#let Type = $italic("Type")$
 $ 
 Env : Path -> Type
 $
-We write $Env[x]$ for the type of path $x$ in $Env$, and $Env[x |-> t]$ for the environment that agrees with $Env$ except at $x$, where it maps to $t$.
-
-= Environment Initialization
-<environment-initialization>
-The initial environment $Env$ flowing through each intermediate statement will be the empty environment $nothing$. The environment flowing through the first statement $Env_0$ should reflect the method's parameters' specifications. For example, for the following method declaration:
-```kotlin
-fun m(unique Ref x, unique local Ref y)
-```
-The flow object for the starting statement will be
-$ 
-Env_0 = { x |-> (unique, global), y |-> (unique, local) } 
+We write $Env[x]$ for retrieving the type of path $x$ in $Env$, and $Env[x |-> t]$ to produce a copy of the environment associating $x$ to $t$. Assigning a parent path to $moved$ automatically moves the $subpaths$ as well, enforcing the following property:
+$
+Env[x] = moved => Env[x...f] = moved "for" x...f in subpaths(x)
 $
 
 = Data-Flow Equations
@@ -64,35 +112,46 @@ $
 For every statement $s$ we define the #emph[incoming] environment $Envin(s)$ and the #emph[outgoing] environment $Envout(s)$ satisfying the data-flow equations: 
 
 #let transfer = $italic("transfer")$
-#let pred = $italic("predecessors")$
 #let join = $italic("join")$
 $
-Envout(s) &= transfer(s) quad \
-Envin(s) &= join(pred(s))
+Envout(n) &= transfer(n) quad \
+Envin(n) &= join(predecessors(n))
 $
-where $pred(s)$ is the set of control-flow predecessors of $s$; the function $transfer(s)$ defines the effect of each kind of statement; the function $join({p_1,...,p_n})$ combines the outgoing environments of all predecessors into a single environment that will be the incoming environment of $s$.
+where:
+- The $transfer(n)$ function defines the effect of each kind of statement; 
+- The $join({p_1,...,p_n})$ function combines the outgoing environments of all predecessors into a single environment that will be the incoming environment of $s$.
+
+== Environment Initialization
+<environment-initialization>
+The initial environment $Env$ flowing through each intermediate statement will be the empty environment $nothing$. The environment flowing through the first statement $Env_0$ should reflect the method's parameters' specifications. For example, for the following method declaration:
+```kotlin
+fun m(unique Ref x, unique local Ref y)
+```
+The flow object for the starting statement will be
+$ 
+Env_0 = {x |-> (unique, global), y |-> (unique, local)} 
+$
 
 == Transfer Function
 <sec:transfer>
-The $transfer(s)$ function describes how the execution of a single statement modifies the output environment $Envout$ in relation to the input environment $Envin$.
-
-#let hole = $cal(E)$
+The $transfer(s)$ function describes how the execution of a single statement modifies the output environment $Envout$ in relation to the input environment $Envin$ with the following rules:
 #let type = $italic("type")$
-#let default = $italic("default")$
-#let restore = $italic("restore")$
+#let reroot = $italic("reroot")$
+#let var = $italic("var")$
 $
-transfer(y : (unique, global) = hole[x]) & = Envin[x |-> moved, y |-> default(y)] \ 
-transfer(y : (unique, local) = hole[x]) & = Envin[x |-> moved, y |-> default(y)] \ 
-transfer(y : (shared, global) = hole[x]) & = Envin[y |-> default(y)] \ 
-transfer(y : (shared, local) = hole[x]) & = Envin[x |-> moved, y |-> default(y)] \ 
-transfer("enter" f(... hole[x] : (unique, global) ...)) & = Envin[x |-> moved] \ 
-transfer("enter" f(... hole[x] : (unique, local) ...)) & = Envin[x |-> moved] \ 
-transfer("enter" f(... hole[x] : (shared, global) ...)) & = Envin \ 
-transfer("enter" f(... hole[x] : (shared, local) ...)) & = Envin[x |-> moved] \ 
-transfer("exit" f(... hole[x] ...)) & = Envin[x |-> default(x)] \ 
+transfer(n) = Envin \
+transfer(y  = hole[x : (unique, \_)]) & = Envin[x |-> moved] union {y.f |-> Envin[x...f] | x...f in subpaths(x)} \
+transfer(y  = hole[x : (\_, local)]) & = Envin[x |-> moved] union {y.f |-> Envin[x...f] | x....f in subpaths(x)} \
+transfer(y = \_) & = Envin[y |-> default(y)] \
+transfer("enter" f(... hole[x : (unique, \_)] ...)) & = Envin[x |-> moved] \ 
+transfer("enter" f(... hole[x : (\_, local)] ...)) & = Envin[x |-> moved] \ 
+transfer("exit" f(... hole[x] ...)) & = Envin[x |-> default(x)] \
 $
-
-The $default$ function retrieves the default uniqueness type for a particular path. The evaluation context hole (denoted $hole$) abstracts over the surrounding expression, allowing us to specify the effect of evaluating a particular path $x$ at a specific value position (e.g. on the right‑hand side of an assignment) without detailing the full expression, because the uniqueness transformation depends only on the kind of operation and the type annotations of the involved paths.
+where:
+- The $subpaths$ function retrieves all the possible sub-paths of a particular path. 
+- The $default$ function retrieves the default uniqueness type for a particular path. 
+- The pattern $x : t$ matches a path $x$ that satisfies the uniqueness type $t$.
+- The value-context hole $hole$ abstracts over the surrounding evaluation context, allowing us to specify a variable reference $x$ at a specific value position without detailing the full expression. In particular, the pattern $y = hole[x]$ specifies a variable node $x$ that may be assigned to a variable $y$; the pattern $f(... hole[x] ...)$ specifies a variable node $x$ that is passed as an argument to the function $f$. 
 
 == Join of Predecessor Environments
 <sec:join>
