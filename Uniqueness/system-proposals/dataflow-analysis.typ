@@ -166,7 +166,6 @@ where:
 <sec:join>
 #let preds = $cal(P)$
 Let $preds = predecessors(node)$ be the list of all predecessors of a statement $node$. The function $join(P)$ combines the output environment of each predecessor point-wise by taking the meet (greatest lower bound) of the types for each path. If a path does not appear in some predecessor, it is assumed to be absent (which we treat as not contributing any constraint). The join is computed by iteratively inserting each predecessor environment into an accumulating result.
-Let $P = { p_1, p_2, ..., p_n }$ be the list of all predecessors of a statement $s$. The function $join(P)$ combines the output environment of each predecessor point-wise by taking the meet (greatest lower bound) of the types for each path. If a path does not appear in some predecessor, it is assumed to be absent (which we treat as not contributing any constraint). The join is computed by iteratively inserting each predecessor environment into an accumulating result.
 
 #let merge = $italic("merge")$
 $ 
