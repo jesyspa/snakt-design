@@ -17,7 +17,7 @@ Paths are syntactical units representing variable locations and field locations.
 #let path = $cal("path")$
 $
 Symbol & ::= x | y | z | ... \
-Path & ::= Symbol | Symbol . Path
+Path path & ::= Symbol | Symbol . Path
 $
 A component of the path can be any name that is not already used by the language. A single-component path represents a local variable, while a multiple-components path represents a field access.
 #let subpaths = $italic("subpaths")$
