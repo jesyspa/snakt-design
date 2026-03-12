@@ -26,6 +26,7 @@ We use the function $subpaths(path)$ to retrieve the subcomponents of a path.
 == Uniqueness Types
 <uniqueness-type-lattice>
 #let UniqueLevel = $italic("Unique-Level")$
+#let ulevel
 #let BorrowLevel = $italic("Borrow-Level")$
 Uniqueness types describe the constraints on the shareability of a path at any given point in the execution of the control-flow graph. Informally, the uniqueness of a path is characterized by:
 / The aliasing status of the path : described by $UniqueLevel$. If a path is #emph[unique] no other alias of that path can exist. If a path is #emph[shared] it may have been aliased by another path. 
