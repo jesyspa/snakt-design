@@ -21,7 +21,7 @@ Path path & ::= Symbol | Symbol . Path
 $
 A component of the path can be any name that is not already used by the language. A single-component path represents a local variable, while a multiple-components path represents a field access.
 #let subpaths = $italic("subpaths")$
-We use the function $subpaths(x...f)$ to retrieve the subcomponents of a path $x$.
+We use the function $subpaths(path)$ to retrieve the subcomponents of a path.
 
 == Uniqueness Types
 <uniqueness-type-lattice>
