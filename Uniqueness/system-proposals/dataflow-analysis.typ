@@ -44,9 +44,9 @@ We denote the set of possible types of a path as:
 #let local = $mono("L")$
 #let moved = $mono("M")$
 $ 
-Type & ::= (UniqueLevel, BorrowLevel) | (moved)"oved" \
-UniqueLevel & ::= (unique)"nique" | (shared)"hared" \
-BorrowLevel & ::= (global)"lobal" | (local)"ocal"
+Type type & ::= (UniqueLevel, BorrowLevel) | (moved)"oved" \
+UniqueLevel ulevel & ::= (unique)"nique" | (shared)"hared" \
+BorrowLevel blevel & ::= (global)"lobal" | (local)"ocal"
 $
 
 The partial order $subset.eq$ is defined by the following relations:
