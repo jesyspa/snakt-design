@@ -37,6 +37,7 @@ Additionally the type lattice contains a top element #emph[moved] that denotes a
 
 We denote the set of possible types of a path as:
 #let Type = $italic("Type")$
+#let type = $cal(t)$
 #let unique = $mono("U")$
 #let shared = $mono("S")$
 #let global = $mono("G")$
