@@ -62,6 +62,7 @@ The transitive closure of $subset.eq$, the greatest lower bound (meet) $inter$, 
 
 == Control-Flow Nodes
 We assume to be operating on a generic Kotlin control-flow graph representing the body of a function declaration.
+#let node = $cal(n)$
 #let fun = $mono("fun")$
 #let successors = $italic("successors")$
 #let predecessors = $italic("predecessors")$
