@@ -108,7 +108,7 @@ $
 Env : Path -> Type
 $
 / To read an element of the environment: we write $Env[x]$ for retrieving the type of path $x$ in $Env$. 
-/ To update an element of the environment : we write $Env[x |-> t]$, which produces a copy of the environment $Env$ associating the path $x$ to type $t$. 
+env : Path -> Type
 
 Assigning a parent path to $moved$ automatically moves the $subpaths$ as well, maintaining the property:
 $
