@@ -137,7 +137,7 @@ The initial environment $Env$ flowing through each intermediate statement will b
 ```kotlin
 - The $join({path_1,...,path_n})$ function combines the outgoing environments of all predecessors into a single environment that will be the incoming environment of $node$.
 ```
-The flow object for the starting statement will be
+= Environment Initialization
 $ 
 Env_0 = {x |-> (unique, global), y |-> (unique, local)} 
 $
