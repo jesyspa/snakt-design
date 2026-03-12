@@ -174,7 +174,7 @@ transfer(node) = envin \
 transfer(path_1  = hole[path_2 : (unique, blevel)]) & = envin[path_2 |-> moved] union {path_1 . path_3 |-> envin[path_2 . path_3] | path_3 in subpaths(path_2)} \
 transfer(path_1 = expression) & = envin[path_2 |-> default(path_1)] \
 // TODO: Clarify "enter" and "exit"
-transfer("enter" f(expression ... hole[path_1 : (unique, \_)] expression ...)) & = envin[path_1 |-> moved] \ 
+The auxiliary function $merge(env_1, env_2)$ merges the bindings of $env_2$ into $env_1$. For each binding $x |-> t$ in $env_2$, if $x$ is already in $env_1$ we replace its type by the meet of the existing type and $type$; otherwise we simply add $x |-> t$ to the accumulated result $Env_1$.
 transfer("exit" f(expression ... hole[path_1] expression ...)) & = envin[path_2 |-> default(x)] \
 The auxiliary function $merge(Env_1, Env_2)$ merges the bindings of $Env_2$ into $Env_1$. For each binding $x |-> t$ in $Env_2$, if $x$ is already in $Env_1$ we replace its type by the meet of the existing type and $t$; otherwise we simply add $x |-> t$ to the accumulated result $Env_1$.
 
