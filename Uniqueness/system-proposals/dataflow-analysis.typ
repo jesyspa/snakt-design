@@ -78,7 +78,8 @@ Every node $node$ of the graph has a set of $successors(node)$ representing the 
 #let Assignment = $italic("Assignment")$
 #let Parameter = $italic("Parameter")$
 $
-Declaration & ::= fun Path( Parameter... ) { Statement... } \
+Node node & ::= Declaration | Parameter | Expression | Statement | Call | Assignment | * \
+Declaration & ::= fun Path( Parameter... ) { Statement... } | * \
 Parameter & ::= Path: Type \
 Expression & ::= Path | Call | * \
 Statement & ::= Assignment | Call | * \
