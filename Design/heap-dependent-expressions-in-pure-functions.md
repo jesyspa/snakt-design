@@ -1,29 +1,181 @@
 # Heap-dependent expressions in pure functions
 
-For a pure function, heap-dependent expressions do not violate purity per se.
-In general, as long as we only read from the heap, the function body remains
-pure. To add support for such function bodies we will rely on the previously
-introduced shared predicate. This predicate grants wildcard permissions to
-all immutable fields of a class allowing us to access those. We will require
-all necessary shared predicates in the precondition of a pure function and
-strategically use 'unfolding in' to ensure heap-accesses in the function are
-valid.
+In this document, we will discuss the design and implementation of heap-dependent
+ expressions in pure functions. We will take a look at the Viper encoding prior to 
+ this change, how to extend it to support heap-dependent expressions, and finally, 
+ what limitations arise from the designed encoding.
 
-## The used access predicate
+## Viper encoding prior and problem definition
 
-For now we will limit the implementation to make use of the already provided
-shared predicate. While only granting permissions to immutable fields, this
-approach is chosen for three reasons:
-1. Convert from shared to another predicate: With the shared predicate already
-being present to obtain another predicate, one would typically convert the
-shared predicate into another predicate using a lemma function or method. As the shared
-predicate is class specific it is non trivial to define one (or multiple) lemma
+The current encoding translates the body of a pure function into a chain of 
+let-bindings. On the right hand side of a let-bound variable, there is, disregarding
+the Ternary guard introduced in https://github.com/JetBrains/SnaKt/pull/62, a value, 
+a local, a function call, or a  Ternary expression that only contains local variables 
+(cf. below). To extend  this encoding to support heap-dependent expressions, the 
+following must be kept in mind:
+
+- Predicates: In SnaKt, we guard accesses to the heap using predicates. In this design, 
+we will rely on the shared predicate providing access to immutable fields of a class.
+While this poses some limitations, we will explain the reasoning behind this in a 
+later section.
+- Unfolding: For heap accesses to be valid, the corresponding predicate containing 
+permissions to the accessed location must be unfolded. In a pure function body, 
+we cannot use an unfold statement as we must construct a single expression (and 
+hence cannot use a statement). Therefore, we will rely on the Viper 'unfolding... in'
+expression to temporarily unfold a predicate in an expression.
+- Field access embedding: On the embedding level, field accesses are modelled 
+as FieldAccess embeddings. The receiver of these embeddings may either be a 
+variable or, in the case of a nested field access, another FieldAccess embedding.
+
+Consider the encoding prior to this design, where ei is an expression and ri is 
+either a value or a local:
+```viper
+let t1 := e1 in
+let t2 := e2 in
+...
+let tn := en in
+    (some condition) ? r1 : ((some_other_condition) ? r2 : r3)
+```
+We want to extend this encoding to support heap accesses. Throughout this design,
+we will assume that heap accesses made in a function are pure. That is, we are 
+only dealing with reads from the heap, as writes are inherently impure. Any 
+function body not satisfying this constraint is rejected by the purity checker.
+
+## Translation
+
+For this section, assume that the shared predicate is present in the function's context.
+We will see later how to achieve this.
+
+The core idea behind translation is to create a let-bound variable for each field access 
+and associate the necessary predicate accesses to make the field access valid with said 
+let-bound variable. Notice that the receiver of a field access is always a local variable, 
+as the receiver is either a local variable directly, or the result of translating the 
+receiver is a local variable. Whenever a new let-bound variable is introduced, we will 
+associate any necessary predicate accesses with it. Namely, when the following expressions 
+are let-bound to a new variable, we will do the following:
+- Local variable: If the let-bound expression is a local variable, we will add all the 
+predicate accesses from said variable to the variable of the let-binding being introduced.
+- Field access: If the let-bound expression is a field access, we will combine the 
+predicate accesses on record for the receiver (a local variable) with the predicate 
+accesses necessary for the field access.
+- Ternary expression: Recall that by construction, a Ternary expression will only resolve 
+between two locals. Hence, if a Ternary expression is encountered, we will associate 
+the union of the predicate accesses on record for both locals.
+- Function call: Note that a function call, by construction, will only have locals as 
+parameters. We will record the union of the predicate accesses on record for every 
+parameter as the predicate accesses associated with the let-bound variable.
+
+When let-binding an expression, we will calculate the predicate accesses 
+based on the rules above. If the let-bound expression is a field access 
+or a function call, we will wrap the expression in a sequence of unfoldings 
+in expressions, unfolding all predicate accesses calculated. The following subsections 
+discuss a few examples. Again, note that throughout these examples we will disregard 
+the Ternary guard introduced in https://github.com/JetBrains/SnaKt/pull/62, as this 
+will be wrapped around the expression at a later point in translation.
+
+### Simple field accesses
+
+For this simple case, we can clearly see that the approach yields a working
+function.
+
+```kotlin
+@Pure
+fun getFirstValue(node: Node): Int {
+    return node.value
+}
+```
+translates to:
+```viper
+function getValue(node: Ref): Int
+    requires acc(sharedPredicate(node), wildcard)
+{
+    let anon0 == (unfolding acc(sharedPredicate(node), wildcard) in node.value) in
+        anon0
+}
+```
+
+### Nested field accesses
+
+In this example, we can see the different accesses being split into different 
+anonymous variables. Note that this encoding would not verify, as the verifier
+has no guarantee that unfolding the shared predicate of node yields the shared 
+predicate of anon0, as this is only the case if `node.next != null`. However, 
+the Ternary guard added later in translation will establish this guarantee.
+
+```kotlin
+@Pure
+fun getThisOrNextValue(node: Node): Int {
+    return node.next?.value ?: node.value
+}
+```
+
+```Viper
+function getThisOrNextValue(node: Ref): Int 
+    requires acc(sharedPredicate(node), wildcard)
+{
+    let anon0 == (unfolding acc(sharedPredicate(node), wildcard) in node.next) in
+    let anon1 == (unfolding acc(sharedPredicate(node), wildcard) in unfolding acc(sharedPredicate(anon0), wildcard) in anon0.value) in
+    let anon2 == (anon0 != null ? anon1 : null) in 
+    let anon3 == (unfolding acc(sharedPredicate(node), wildcard) in node.value) in
+    let anon4 == (anon2 != null ? anon2 : anon3) in
+        anon4
+}
+```
+
+### Function calls
+
+For function calls, the necessary predicate accesses are associated with the 
+variable let-bound to a function call. If the function returns a reference, 
+these predicate accesses are used for later accesses on the reference. Notice 
+that the unfold before calling id seems unnecessary at first glance. However, 
+we will see later that the precondition will require the sharedPredicate of 
+node.next to be available, making this unfold necessary. Also note that there 
+are now guarantees on the unfolds happening in the called function. This limitation 
+will be discussed in 'Limitations'.
+
+```kotlin
+@Pure
+fun id(maybeNode: Node?): Node? = maybeNode
+
+@Pure
+fun getNextValueFromId(node: Node): Int {
+    val nextNode = id(node.next)
+    return if (nextNode == null) 0 else nextNode.value
+}
+```
+
+```Viper
+function id(node: Ref): Ref {
+    node
+}
+
+function getNextValueFromId(node: Ref): Int {
+    let anon0 == (unfolding acc(sharedPredicate(node), wildcard) in node.next) in
+    let nextNode == (unfolding acc(sharedPredicate(node), wildcard) in (id(anon0))) in
+    let anon1 == (0) in
+    let anon2 == (unfolding acc(sharedPredicate(node), wildcard) in unfolding acc(sharedPredicate(nextNode), wildcard) in nextNode.value) in
+    let anon3 == (nextNode == null ? anon1 : anon2) in
+        anon3
+}
+```
+
+## The used predicate
+
+Instead of using the shared predicate, which only grants permissions to immutable 
+fields of a class, one could have created another predicate, say the pure predicate, 
+granting wildcard permissions to all fields of a class. We decided against this for
+the following reasons:
+
+1. Complexity of converting the shared predicate to another: With the shared predicate 
+already being present, to obtain another predicate, one would typically convert the 
+shared predicate into another predicate using a lemma function or method. As the shared 
+predicate is class specific, it is non trivial to define one (or multiple) Lemma 
 functions handling this conversion.
-2. Prevent loss of information: With the shared predicate already being present
-and the verifier associating information with it introducing another predicate
-raises the question of whether or not information can be 'transferred' to the
-other predicate. Especially for recursive predicates this becomes a hard
-problem to solve. Consider the following Viper example:
+2. Prevent loss of information: With the shared predicate already being present and 
+the verifier associating information with it, introducing another predicate raises 
+the question of whether information can be 'transferred' to the other predicate. Especially
+for recursive predicates, this becomes a hard problem to solve. Consider the following 
+Viper example:
 
 ```Viper
 field val: Int
@@ -63,195 +215,20 @@ method test_loss_of_info(head: Ref)
 }
 ```
 
-In this exmaple we defined another predicate (named the purePredicate) and a lemma method
-converting the shared predicate into the other predicate. We then tried to verify the
-assertion that holds in the precondition. However, this will not verify. Keeping the shared
-predicate will prevent such loss of information
-
-3. Extra permissions: Building another predicate that also supports access to
-mutable fields will cause us to inhale permissions to said fields. For these
-inhale statements there is no argument for their validity. Hence, the whole 
-verification relies on a potentially false assumption. This should be avoided
-as much as possible.
+In this example, we defined another predicate (named the purePredicate) and a 
+method converting the shared predicate into the other predicate. We then tried 
+to verify the assertion that holds in the precondition. However, this will not 
+verify. Keeping the shared predicate will prevent such loss of information:
 
 ## Constructing the precondition of a function
 
-Note that all reference types for which we need to require the shared predicate
-can be found in the function's parameters. Furthermore, because the predicate
-also contains the predicates for any references within the parameters, no extra
-predicates need to be acquired to ensure that potentially nested heap accesses
-in the function body work. However, the predicate only contains the predicates
-of nested references if they are non-null (see the shared predicate definition above).
-We will discuss the implications of this constraint in the "Nested field
-accesses" subsection.
+Note that all reference types for which we need to require the shared predicate 
+can be found in the function's parameters. Furthermore, because the predicate 
+also contains the predicates for any references within the parameters, no 
+extra predicates need to be acquired to ensure that potentially nested heap 
+accesses in the function body work.
 
-## Translation
-
-The current encoding looks like the following: 
-
-let t1 := e1 in
-let t2 := e2 in
-...
-let tn := en in
-    (some condition) ? r1 : ((some_other_condition) ? r2 : r3)
-
-In this encoding ei is either a value (or an expression resolving to one),
-a local, a field access or a Ternary expression.
-Note however, that if ei is a Ternary expressions by definition of the encoding it
-may only have local variables (namely previously introduced let-bound variables)
-in its then or else branch. Hence, the function body
-can safely start with 'unfolding in' expressions unfolding all necessary predicates
-to grant access to all fields required in the definitions of any let-bound variable.
-The expression of the innermost let-binding is different. It is a potentially nested
-Ternary expression. ri can be any expression including field accesses on let-bound
-variables. Here, it makes sense to unfold the necessary shared predicates
-right at the place where they are needed as the verifier then knows under what
-conditions this unfold may happen.
-
-In SnaKt, we construct the previously described encoding by tracking two things:
-- A list of pairs of variable names and their definition (we call this an 
-`SSAAssignment`), where each pair will be translated into a let-bound variable.
-- A list of pairs of encountered return expressions and the conditions under which
-they are encountered. These pairs will result in the innermost Ternary expression
-described above, where the Ternary expression will resolve to the first collected
-return expression if its condition is met, to the second if the condition for the first
-is not met but the one for the second is met and so on.
-
-To introduce the previously described translation we will do the following:
-- For each `SSAAssignment` we will associate what predicates must be unfolded for
-this let-bound variable to be defined. Namely, while translating definitions of
-let-bound variables we will use the already existing 'hierarchyUnfoldPath' to
-determine the class information of any shared predicate that we have to unfold
-for this `SSAAssignment` to be valid
-- After collecting all information of the function body we will insert the
-necessary 'unfolding in' expressions directly at the field accesses in return
-expressions. As we collected the class information for all `SSAAssignemnts` we
-can infer any further predicates that need to be unfolded if a field of a
-let-bound variable is accessed.
-
-To further elaborate on this approach consider the examples in the following
-subsections
-
-### Simple field accesses
-
-For this simple case, we can clearly see that the approach yields a working
-function.
-
-```kotlin
-@Pure
-fun getFirstValue(node: Node): Int {
-    return node.value
-}
-```
-translates to:
-```viper
-function getValue(node: Ref): Int
-    requires acc(sharedPredicate(node), wildcard)
-{
-    unfolding sharedPredicate(node) in
-        node.value
-}
-```
-
-### Nested field accesses
-
-In the example below, we must also unfold the predicate of the reference to
-`next` to ensure the access made to the next node is valid. In general, nested
-field accesses can be understood as a path. When encountering a nested field
-access, we need to unfold all predicates for the types on the path that have
-not been previously unfolded. A natural consideration is to simply unfold as
-much as possible at the beginning of the function. This, however, would not
-work for the example below, as unfolding the predicates implicitly assumes that
-the path does not contain a null reference. Below, this is only true in the
-`else` branch of the ternary operator (or the Elvis operator in the Kotlin
-version); hence, an on-demand solution is required.
-
-```kotlin
-@Pure
-fun getThisOrNextValue(node: Node): Int {
-    return node.next?.value ?: node.value
-}
-```
-
-```Viper
-function getThisOrNextValue(node: Ref): Int 
-    requires acc(sharedPredicate(node), wildcard)
-{
-    unfolding sharedPredicate(node) in 
-        node.next == null ? 
-            node.val : 
-            unfolding sharedPredicate(node.next) in node.next.val
-}
-```
-
-### Function calls to self
-
-Even though we are unfolding the predicate required by the called function,
-this translation still works. This is because, in a verification context,
-unfolding a predicate with wildcard permissions does not cause that context to
-lose wildcard permissions to the predicate. 
-
-```kotlin
-@Pure
-fun length(node: Node): Int {
-    return if (node.next == null) {
-        1
-    } else {
-        length(node.next)
-    }
-}
-```
-
-```Viper
-function length(node: Ref): Int 
-    requires acc(sharedPredicate(node), wildcard)
-{
-    unfolding sharedPredicate(node) in 
-        node.next == null ? 
-            1 : 
-            length(node.next)
-}
-```
-
-### Limitations
-
-There is a severe limitation in verification capibilities arising from the fact
-that conditional assignments or branches in general write results to intermediate
-values regardless of the conditoin that must be met for these to hold. Consider
-the following example:
-
-@Pure
-fun getNextValueOrDefault(node: Node): Int {
-    val defaultOrValue = if (node.next == null) {
-        -1
-    } else {
-        node.next.value
-    }
-    return defaultOrValue
-}
-```
-
-This will translate to:
-
-```Viper
-function getNextValueOrDefault(node: Ref): Int 
-    requires acc(sharedPredicate(node), wildcard)
-{
-    unfolding sharedPredicate(node) in
-    unfolding sharedPredicate(node.next) in
-    let anon1 == (-1) in
-    let anon2 == (node.next.value) in
-    let anon3 == ((node.next == null) ? anon1 : anon2) in
-        anon3
-}
-```
-
-Clearly, this won't verify due to insufficient permissions to the shared predicate
-of node.next. Hence, this is a limitation of this approach. However note, that 
-the concious user can avoid this by boxing nullity checks into the return expression.
-For an example of this please note the code in 'Nested Field Accesses' above
-
-## When the function gets used
+## Using a function
 
 There are three possible places where a function may be used: In another
 function, in a method, or in a specification. We will detail these use cases
@@ -259,58 +236,39 @@ below.
 
 ### In another function
 
-In this case, we need to unfold predicates in a similar way as we did for
-field accesses before calling the function. Note that any shared predicates
-required by the called function must either be directly available in the
-caller's precondition or be contained within the predicates in the caller's
-precondition.
+In this case, we need to unfold predicates in a similar way as we did for 
+field accesses before calling the function. Note that any shared predicates 
+required by the called function must either be directly available in the caller's 
+precondition or be contained within the predicates in the caller's precondition. 
+Hence, unfolding all collected accesses on call-site is sufficient to guarantee 
+a satisfied precondition (assuming the call is guarded against null reference 
+appropriately).
 
 ```kotlin
 @Pure
-fun isLastIndex(node: Node, index: Int): Bool {
-    return length(node) == index + 1 
-}
-```
-
-```Viper
-function isLastIndex(node: Ref, index: Int): Bool 
-    requires acc(sharedPredicate(node), wildcard)
-{
-    unfolding sharedPredicate(node) in 
-        length(node) == index + 1 ? 
-            true : false
-}
-```
-
-Further, consider the example calling a function with a heap access as a parameter.
-These cases will be handled in the same way field accesses are handled as described
-above:
-
-```kotlin
-@Pure
-fun isNextLastIndex(node: Node, index: Int): Boolean {
+fun isSecondToLastIndex(node: Node?s, index: Int): Boolean {
     return isLastIndex(node.next, index + 1) 
 }
 ```
 
 ```
-function isNextLastIndex(node: Ref, index: Int): Bool 
+function isSecondToLastIndex(node: Ref, index: Int): Bool 
     requires acc(sharedPredicate(node), wildcard)
 {
-    unfolding sharedPredicate(node) in 
-        isLastIndex(node.next, index + 1)
+    let anon0 == (unfolding acc(sharedPredicate(node), wildcard) in node.next) in
+        isLastIndex(anon0, index + 1)
 }
 ```
 
 ### In a method
 
-As the shared predicate is present in a method and is being unfolded on field accesses
-with wildcard permissions it remains in the verification context. Hence, we can call
-the function without any additional work
+As the shared predicate is present in a method and is being unfolded on field 
+accesses with wildcard permissions, it remains in the verification context. Hence, 
+we can call the function without any additional work.
 
 ```kotlin
 fun getLastIndex(node: Node): Int {
-    val len = length(node)
+    val len = length(node.next)
     return len - 1
 }
 ```
@@ -319,22 +277,21 @@ fun getLastIndex(node: Node): Int {
 method getLastIndex(node: Ref) returns (res: Int)
 {
     inhale acc(sharedPredicate(node), wildcard)
-    var len: Int := length(node)
-    res := len - 1
+    unfold acc(sharedPredicate(node), wildcard)
+    var anon0: Ref := node.next
+    var len: Int := length(anon0)
+    res := len
 }
 ```
 
 ### In a specification
 
-If a function is used in a specification, that context must also require the
-predicates from the function's precondition to ensure the specification is
-valid. If the specification is the part of a function, then the predicate will
-be required in the precondition by the translation methodology described above.
-If the specification is part of a method however, we must add the shared predicate
-to the precondition of said function. However, note that any caller will have the
-shared predicate directly available (as described in the subsection above). Hence,
-we can safely add the shared predicate as a requirement into the precondition
-without causing verification errors.
+If a function is used in a specification, the unfolding logic is slightly changed.
+We cannot introduce an anonymous variable for a function's parameter. Instead, 
+we need to use the unfolding in expression to unfold all necessary predicates.
+This is already implemented in SnaKt and does not need further consideration. 
+Further, if the specification is a precondition, we need to require the shared 
+predicate of any parameter to satisfy the precondition of the called function.
 
 ```kotlin
 fun getFirstValue(node: Node): Int {
@@ -351,6 +308,53 @@ method getFirstValue(node: Ref) returns (res: Int)
     requires length(node) > 0
 {
     inhale acc(sharedPredicate(node), wildcard)
+    unfold acc(sharedPredicate(node), wildcard)
     res := node.value
 }
 ```
+
+## Limitations
+
+In this section, we will discuss limitations the designed encoding has, and what 
+conceptual work needs to be done to overcome them.
+
+### Guarantees when calling a function
+
+Consider:
+
+```kotlin
+@Pure
+fun getNext(node: Node): Node? {
+    return node.next
+}
+
+@Pure
+fun getNextValueOrDefault(node: Node): Int {
+    val nextNode = getNext(node)
+    return if(nextNode == null) 0 : nextNode.value
+}
+```
+with the Viper translation:
+```
+function getNext(node: Ref): Ref
+    requires acc(sharedPredicate(node), wildcard)
+{
+    unfolding acc(sharedPredicate(node), wildcard) in node.next
+}
+
+function getNextValueOrDefault(node: Ref): Int
+    requires acc(sharedPredicate(node), wildcard)
+{
+    let nextNode == (getNext(node)) in
+    let anon0 == (nextNode.value) in
+    let anon1 == (0) in
+    let anon2 == (nextNode == null ? anon1 : anon0) in
+        anon2
+}
+```
+
+In the let-binding of `anon0` the verification context is not holding sufficient
+permissions to access the value of `nextNode`. In general, we have no guarantee
+of unfolds happening in a function and hence cannot deduce what must be unfolded
+for returns of functions to be used. To mitigate this issue, one might associate
+such information with a function. The complexity of this is to be determined.
