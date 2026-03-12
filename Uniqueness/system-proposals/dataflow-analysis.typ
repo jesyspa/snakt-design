@@ -150,7 +150,7 @@ The $transfer(s)$ function describes how the execution of a single statement mod
 #let var = $italic("var")$
 $
 transfer(n) = Envin \
-transfer(y  = hole[x : (unique, \_)]) & = Envin[x |-> moved] union {y.f |-> Envin[x...f] | x...f in subpaths(x)} \
+The $transfer(node)$ function describes how the execution of a single statement modifies the output environment $envout$ in relation to the input environment $envin$ with the following rules:
 transfer(y = \_) & = Envin[y |-> default(y)] \
 transfer("enter" f(... hole[x : (unique, \_)] ...)) & = Envin[x |-> moved] \ 
 transfer("exit" f(... hole[x] ...)) & = Envin[x |-> default(x)] \
