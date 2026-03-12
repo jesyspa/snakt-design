@@ -95,7 +95,7 @@ Note that for each statement and expression in the program there may be multiple
 $
 v = m(f(x, y, z))
 $
-For this statement, the pattern $v = hole[Expression]$ matches the following control-flow nodes:
+For this statement, the pattern $v = hole[expression]$ matches the following control-flow nodes preserving the dominance order $->$:
 $
 v = hole[x] -> v = hole[y] -> v = hole[z] -> v = hole[f(x, y, z)] -> v = hole[m(f(x, y, z))]
 $
