@@ -115,7 +115,7 @@ env : Path -> Type
 
 Assigning a parent path to $moved$ automatically moves the $subpaths$ as well, maintaining the property:
 $
-Env[x] = moved => Env[x...f] = moved "for" x...f in subpaths(x)
+env[path_1] = moved => env[path_2] = moved "for" path_2 in subpaths(x)
 $
 
 = Data-Flow Equations
