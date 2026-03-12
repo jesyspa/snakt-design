@@ -168,9 +168,8 @@ Let $preds = predecessors(node)$ be the list of all predecessors of a statement 
 Let $P = { p_1, p_2, ..., p_n }$ be the list of all predecessors of a statement $s$. The function $join(P)$ combines the output environment of each predecessor point-wise by taking the meet (greatest lower bound) of the types for each path. If a path does not appear in some predecessor, it is assumed to be absent (which we treat as not contributing any constraint). The join is computed by iteratively inserting each predecessor environment into an accumulating result.
 
 #let merge = $italic("merge")$
-transfer(node) = envin \
-transfer(path_1  = hole[path_2 : (unique, blevel)]) & = envin[path_2 |-> moved] union {path_1 . path_3 |-> envin[path_2 . path_3] | path_3 in subpaths(path_2)} \
-transfer(path_1 = expression) & = envin[path_2 |-> default(path_1)] \
+$ 
+join(nothing) & = {} \
 join(node_1 dot preds) & = merge(envout(node_1), join(ptail))
 The auxiliary function $merge(env_1, env_2)$ merges the bindings of $env_2$ into $env_1$. For each binding $x |-> t$ in $env_2$, if $x$ is already in $env_1$ we replace its type by the meet of the existing type and $type$; otherwise we simply add $x |-> t$ to the accumulated result $Env_1$.
 transfer("exit" f(expression ... hole[path_1] expression ...)) & = envin[path_2 |-> default(x)] \
