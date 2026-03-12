@@ -60,8 +60,6 @@ $
 
 The transitive closure of $subset.eq$, the greatest lower bound (meet) $inter$, and least upper bound (join) $union$ follow from this order.
 
-#let default = $italic("default")$
-
 == Control-Flow Nodes
 We assume to be operating on a generic Kotlin control-flow graph representing the body of a function declaration.
 #let fun = $mono("fun")$
