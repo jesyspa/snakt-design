@@ -178,10 +178,10 @@ The auxiliary function $merge(Env_1, Env_2)$ merges the bindings of $Env_2$ into
 
 #let domain = $italic("domain")$
 $ 
-merge(Env_1, nothing) & = Env_1 \
-merge(Env_1, (x |-> t) dot Env_2) & = cases(
-  merge(Env_1[x |-> (t inter Env_2[x])], Env_2) & "if" x in domain(R), 
-  merge(Env_1[x |-> t], Env_2) & "otherwise"
+merge(env_1, nothing) & = env_1 \
+merge(env_1, (path_1 |-> type_1) dot env_2) & = cases(
+  merge(env_1[path_1 |-> (type_1 inter env_2[x])], env_2) & "if" path_1 in domain(env_2), 
+  merge(Env_1[path_1 |-> type_1], env_2) & "otherwise"
 ) 
 $
 
