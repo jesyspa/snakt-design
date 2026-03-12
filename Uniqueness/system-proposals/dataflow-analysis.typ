@@ -66,7 +66,9 @@ We assume to be operating on a generic Kotlin control-flow graph representing th
 #let fun = $mono("fun")$
 #let successors = $italic("successors")$
 #let predecessors = $italic("predecessors")$
-Every node $n$ of the graph has a set of $successors(n)$ representing the nodes that execute immediately after $n$, as well as a set $predecessors(n)$ representing the set of nodes executing immediately before $n$. To designate a node in the control-flow graph we will use the high-level expressions and statements to which it corresponds. The constructs that are relevant to this analysis are the following:
+Every node $node$ of the graph has a set of $successors(node)$ representing the nodes that execute immediately after $node$, as well as a set $predecessors(node)$ representing the set of nodes executing immediately before $node$. To designate a node in the control-flow graph we will use the Kotlin expressions and statements to which it corresponds. The syntax that is relevant to this analysis is the following:
+
+#let Node = $italic("Node")$
 #let Declaration = $italic("Declaration")$
 #let Expression = $italic("Expression")$
 #let Statement = $italic("Statement")$
