@@ -161,7 +161,7 @@ transfer(y = \_) & = Envin[y |-> default(y)] \
 transfer("enter" f(... hole[x : (unique, \_)] ...)) & = Envin[x |-> moved] \ 
 transfer("exit" f(... hole[x] ...)) & = Envin[x |-> default(x)] \
 $
-where:
+
 == Join of Predecessor Environments
 <sec:join>
 #let preds = $cal(P)$
