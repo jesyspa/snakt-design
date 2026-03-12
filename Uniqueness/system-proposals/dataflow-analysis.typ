@@ -130,8 +130,8 @@ $
 where:
 - The $transfer(n)$ function defines the effect of each kind of statement; 
 - The $join({p_1,...,p_n})$ function combines the outgoing environments of all predecessors into a single environment that will be the incoming environment of $s$.
-
-== Environment Initialization
+envout(node) &= transfer(node) \
+envin(node) &= join(predecessors(node))
 <environment-initialization>
 The initial environment $Env$ flowing through each intermediate statement will be the empty environment $nothing$. The environment flowing through the first statement $Env_0$ should reflect the method's parameters' specifications. For example, for the following method declaration:
 ```kotlin
