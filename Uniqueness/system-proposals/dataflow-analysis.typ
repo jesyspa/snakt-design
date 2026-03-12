@@ -108,7 +108,7 @@ $
 #let env = $cal(U)$
 A type environment $env$ is a partial map from paths to types:
 $ 
-Env : Path -> Type
+env : Path -> Type
 $
 / To read an element of the environment: we write $env[x]$ for retrieving the type of path $x$ in $env$. 
 / To update an element of the environment : we write $env[x |-> t]$, which produces a copy of the environment $env$ associating the path $x$ to type $t$. 
