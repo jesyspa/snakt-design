@@ -99,6 +99,9 @@ For this statement, the pattern $v = hole[Expression]$ matches the following con
 $
 v = hole[x] -> v = hole[y] -> v = hole[z] -> v = hole[f(x, y, z)] -> v = hole[m(f(x, y, z))]
 $
+// TODO: Describe typed holes
+// where:
+// - The pattern $x : t$ matches a path $x$ that satisfies the uniqueness type $t$.
 
 == Uniqueness Typing Environment
 <type-environment>
