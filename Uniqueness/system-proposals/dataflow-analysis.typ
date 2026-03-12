@@ -155,11 +155,12 @@ where:
 Let $P = { p_1, p_2, ..., p_n }$ be the list of all predecessors of a statement $s$. The function $join(P)$ combines the output environment of each predecessor point-wise by taking the meet (greatest lower bound) of the types for each path. If a path does not appear in some predecessor, it is assumed to be absent (which we treat as not contributing any constraint). The join is computed by iteratively inserting each predecessor environment into an accumulating result.
 
 #let merge = $italic("merge")$
-$ 
-join(nothing) & = {} \
-join(p dot P) & = merge(Envout(p), join(P))
-$
-
+transfer(node) = envin \
+transfer(path_1  = hole[path_2 : (unique, blevel)]) & = envin[path_2 |-> moved] union {path_1 . path_3 |-> envin[path_2 . path_3] | path_3 in subpaths(path_2)} \
+transfer(path_1 = expression) & = envin[path_2 |-> default(path_1)] \
+// TODO: Clarify "enter" and "exit"
+transfer("enter" f(expression ... hole[path_1 : (unique, \_)] expression ...)) & = envin[path_1 |-> moved] \ 
+transfer("exit" f(expression ... hole[path_1] expression ...)) & = envin[path_2 |-> default(x)] \
 The auxiliary function $merge(Env_1, Env_2)$ merges the bindings of $Env_2$ into $Env_1$. For each binding $x |-> t$ in $Env_2$, if $x$ is already in $Env_1$ we replace its type by the meet of the existing type and $t$; otherwise we simply add $x |-> t$ to the accumulated result $Env_1$.
 
 #let domain = $italic("domain")$
