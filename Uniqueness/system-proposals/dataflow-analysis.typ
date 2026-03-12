@@ -130,8 +130,8 @@ For every node $node$ we define the #emph[incoming] environment $envin(node)$ an
 #let transfer = $italic("transfer")$
 #let join = $italic("join")$
 $
-Envout(n) &= transfer(n) quad \
-Envin(n) &= join(predecessors(n))
+envout(node) &= transfer(node) \
+envin(node) &= join(predecessors(node))
 $
 where:
 - The $transfer(n)$ function defines the effect of each kind of statement; 
