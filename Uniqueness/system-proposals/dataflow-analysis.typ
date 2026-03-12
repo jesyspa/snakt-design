@@ -155,11 +155,12 @@ The $transfer(node)$ function describes how the execution of a single statement 
 #let reroot = $italic("reroot")$
 #let var = $italic("var")$
 $
-transfer(n) = Envin \
-The $transfer(node)$ function describes how the execution of a single statement modifies the output environment $envout$ in relation to the input environment $envin$ with the following rules:
-transfer(y = \_) & = Envin[y |-> default(y)] \
-transfer("enter" f(... hole[x : (unique, \_)] ...)) & = Envin[x |-> moved] \ 
-transfer("exit" f(... hole[x] ...)) & = Envin[x |-> default(x)] \
+transfer(node) = envin \
+transfer(path_1  = hole[path_2 : (unique, blevel)]) & = envin[path_2 |-> moved] union {path_1 . path_3 |-> envin[path_2 . path_3] | path_3 in subpaths(path_2)} \
+transfer(path_1 = expression) & = envin[path_2 |-> default(path_1)] \
+// TODO: Clarify "enter" and "exit"
+transfer("enter" f(expression ... hole[path_1 : (unique, \_)] expression ...)) & = envin[path_1 |-> moved] \ 
+transfer("exit" f(expression ... hole[path_1] expression ...)) & = envin[path_2 |-> default(x)] \
 $
 
 == Join of Predecessor Environments
