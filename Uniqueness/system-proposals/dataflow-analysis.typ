@@ -81,7 +81,7 @@ $
 Node node & ::= Declaration | Parameter | Expression | Statement | Call | Assignment | * \
 Declaration & ::= fun Path( Parameter... ) { Statement... } | * \
 Parameter & ::= Path: Type \
-Expression & ::= Path | Call | * \
+Expression expression & ::= Path | Call | * \
 Statement & ::= Assignment | Call | * \
 Call & ::= Path(Expression...) \
 Assignment & ::= Path = Expression
