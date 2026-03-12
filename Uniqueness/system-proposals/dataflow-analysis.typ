@@ -139,7 +139,7 @@ The initial environment $Env$ flowing through each intermediate statement will b
 ```
 = Environment Initialization
 $ 
-Env_0 = {x |-> (unique, global), y |-> (unique, local)} 
+The initial environment $env$ flowing through each intermediate statement will be the empty environment $nothing$. The environment flowing through the first statement $Env_0$ should reflect the method's parameters' specifications. For example, for the following method declaration:
 $
 
 == Transfer Function
