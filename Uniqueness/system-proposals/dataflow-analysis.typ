@@ -71,6 +71,7 @@ Every node $node$ of the graph has a set of $successors(node)$ representing the 
 #let Node = $italic("Node")$
 #let Declaration = $italic("Declaration")$
 #let Expression = $italic("Expression")$
+#let expression = $cal(e)$
 #let Statement = $italic("Statement")$
 #let Call = $italic("Call")$
 #let CallTail = $italic("Call-Tail")$
