@@ -150,7 +150,7 @@ $
 
 == Transfer Function
 <sec:transfer>
-The $transfer(s)$ function describes how the execution of a single statement modifies the output environment $Envout$ in relation to the input environment $Envin$ with the following rules:
+The $transfer(node)$ function describes how the execution of a single statement modifies the output environment $envout$ in relation to the input environment $envin$ with the following rules:
 #let type = $italic("type")$
 #let reroot = $italic("reroot")$
 #let var = $italic("var")$
