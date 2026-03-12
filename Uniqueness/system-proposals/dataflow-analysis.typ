@@ -118,6 +118,9 @@ $
 env[path_1] = moved => env[path_2] = moved "for" path_2 in subpaths(x)
 $
 
+#let default = $italic("default")$
+// TODO Describe default
+
 = Data-Flow Equations
 <data-flow-equations>
 #let Envin = $Env_("in")$
