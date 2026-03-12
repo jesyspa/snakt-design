@@ -123,9 +123,9 @@ $
 
 = Data-Flow Equations
 <data-flow-equations>
-#let Envin = $Env_("in")$
-#let Envout = $Env_("out")$
-For every statement $s$ we define the #emph[incoming] environment $Envin(s)$ and the #emph[outgoing] environment $Envout(s)$ satisfying the data-flow equations: 
+#let envin = $env_("in")$
+#let envout = $env_("out")$
+For every node $node$ we define the #emph[incoming] environment $envin(node)$ and the #emph[outgoing] environment $envout(node)$ satisfying the data-flow equations: 
 
 #let transfer = $italic("transfer")$
 #let join = $italic("join")$
