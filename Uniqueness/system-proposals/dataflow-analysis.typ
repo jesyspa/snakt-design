@@ -105,8 +105,8 @@ $
 
 == Uniqueness Typing Environment
 <type-environment>
-#let Env = $cal(U)$
-A type environment $Env$ is a partial map from paths to types:
+#let env = $cal(U)$
+A type environment $env$ is a partial map from paths to types:
 $ 
 Env : Path -> Type
 $
