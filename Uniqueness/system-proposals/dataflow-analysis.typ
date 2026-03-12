@@ -14,6 +14,7 @@ Any program-level syntax reported in the following sections has a correspondent 
 Paths are syntactical units representing variable locations and field locations. The syntax can be described as a list of symbols:
 #let Symbol = $italic("Symbol")$
 #let Path = $italic("Path")$
+#let path = $cal("path")$
 $
 Symbol & ::= x | y | z | ... \
 Path & ::= Symbol | Symbol . Path
