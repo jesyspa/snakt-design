@@ -149,14 +149,14 @@ To know wheather the predicate must be fold back, we need to know if after the a
 
 The conclusion is, that we can not unfold the unique predicates on the field access level, because in the first snippet we are suppost to fold it back afterwards, whereas in the second we are not. However the information available on the field access in the `ExpEmbedding` level is the same for each snippet.
 
-# Unfolding Strategy
+## Unfolding Strategy
 
 The unfolding strategy is divided into two parts: The **Shared Unfolding** part and the **Unique Unfolding** part.
 
-## Shared Unfolding
+### Shared Unfolding Strategy
 This contains all the field accesses that either require the shared predicate or a havoc call. This potential unfolds can be inserted on the field access level. Also it is not possible to perform this earlier. Because if the traversal of the path contains a havoc call, the result will be stored in a anonyous variable. This variable will only be known, once the call is inserted. So the unfold of shared predicates, where the shared predicate comes from the havoc call, must be inserted on the field access level. So it is easier to insert all the shared predicates unfolding on the level fo the field access in the `ExpEmbedding`. 
 
-## Unique Unfolding
+### Unique Unfolding Strategy
 This contains all the unique predicate unfolds. This will be performed on the statement level. On the statement level the following is done:
 1. Extract all the used paths (we refer to them as "used paths")
 2. Use the result of the uniqueness analysis and the Mearly FSM to associate each field access of each used path with an action.
@@ -165,7 +165,7 @@ This contains all the unique predicate unfolds. This will be performed on the st
 5. Insert the unfold statements.
 
 
-# Unique Folding Strategy
+## Unique Folding Strategy
 
 In the folding strategy we only need to consider unique predicates. Because the shared predicates are unfodled with wildcard permission, which means we still have access to the predicate.
 The folding strategy works closely together with the Unique Unfolding strategy.
@@ -176,19 +176,19 @@ The folding strategy works closely together with the Unique Unfolding strategy.
 
 
 
-# Unique Folding Strategy on ExpEmbedding
+## Unique Folding Strategy on ExpEmbedding
 
 The unique folding/unfolding strategy must be added to this `ExpEmbedding`s:
 - `Declare`
 - `Assign`
 - `FieldModification`
-- `If` - Here especially the condition is important. The permissions must be unfolded and then folded back before entering the branches. Another option is that the folds happen in the beginning of each branch. If the else branch does not exists, it must be added to include the necessary fold statements.
+- `If` - Only the condition needs to be managed. The bodies consist again of `ExpEmbeddings` which can perform the unfolding themselves. The permissions must be unfolded and then folded back before entering the branches. Another option is that the folds happen in the beginning of each branch. If the else branch does not exists, it must be added to include the necessary fold statements.
 - `While` - Similar challenge as the `If` with additional need for invariant extractions. 
 - `MethodCall`
 - `Elvis` - Similar to the `If`
 - `Return` - The fold (if they even can exist) must be placed before the viper `goto`. 
 
 
-## Invariant Extraction
+### Invariant Extraction
 
 We focus here on which unique predicates must be carried over the loop. For this we need the result of the uniqueness analysis from before the loop, at the beginning of the loop body, at the end of the loop body, and after the loop. From all these results we need to identify all the shortest unique and not partially moved paths. The corresponding unique predicates must be added to the loop invariant.  
