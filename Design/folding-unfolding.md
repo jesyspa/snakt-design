@@ -1,28 +1,14 @@
 # Predicates folding/unfolding
 
 ## Expected Behaviour
-Deciding what has to be unfolded can be quite involved. The following classes should include most cases.
+Deciding what has to be unfolded can be quite involved. We construct a recursive class such that every possible order of field accesses are possible. We ignore that this datastructure is infinite. 
 
 ```kotlin
 class A(
-    @Unique @Borrowed var mu : B,
-    @Unique val iu : B,
-    @Unique @Borrowed var ms : B,
-    val is : B
-)
-
-class B(
-    @Unique @Borrowed var mu : C,
-    @Unique val iu : C,
-    @Unique @Borrowed var ms : C,
-    val is : C
-)
-
-class C(
-    @Unique @Borrowed var mu : Any,
-    @Unique val iu : Any,
-    @Unique @Borrowed var ms : Any,
-    val is : Any
+    @Unique @Borrowed var mu : A,
+    @Unique val iu : A,
+    @Unique @Borrowed var ms : A,
+    val is : A
 )
 ```
 
@@ -36,56 +22,39 @@ We use the following abbreviations:
 ### Floatchart
 This is how the diagram should be read:
 - The color of the nodes is the result of the uniquness type system.
-- Every node represent an object and how it can be accessed. For example: The node `A.um` represent an object `B` which was accessed through the field `mu` of object `A`.
+- The circles represent objects, while the rectangles represent the fields of the object.
 - The Uniqueness Type text inside the box, is the declared uniqueness type of the field.
-- The arrow from `A -action-> A.field`, means what action needs to be performed to access `A.field`.
+- The arrow from `object -action-> field`, means what action needs to be performed to access `field` on `object`.
 - To access a deeper field, follow the arrows and execute the actions in the order of traversal.
-- To not let the diagram explode we use dotted arrows, to indicate that we reached a situation which is very similar to a already seen one.
+- To not let the diagram explode we use dotted arrows, to indicate that we reached a situation which is equivalent to an already seen one.
 
 
 ```mermaid
 graph LR
-    A[Class A] -- unique --> B_um_ui["A.um<br/>Mutable / Unique <br/> "A.ui<br/>Immutable / Unique""]
-    
-    B_um_ui -- unique --> C_um_ui["B.um<br/>Mutable / Unique <br/> B.ui<br/>Immutable / Unique"]
+    A_u((Class A <br/> Unique)) -- unique --> B_um_ui["um<br/>Mutable / Unique <br/> ui<br/>Immutable / Unique"]
 
-  subgraph C_sm_si[" "]
-    C_sm["B.sm<br/>Mutable / Shared"]
-    C_si["B.si<br/>Immutable / Shared"]
-  end
-
-    B_um_ui -- havoc  --> C_sm["B.sm<br/>Mutable / Shared"]
-    B_um_ui -- shared --> C_si["B.si<br/>Immutable / Shared"]
-    
-    C_um_ui -.-> rec1(Start at A.um/A.ui)
-
-    C_sm_si -- havoc --> D9["C.um<br/>Mutable / Unique <br/> C.sm<br/>Mutable / Shared"]
-    C_sm_si -- shared --> D10["C.ui<br/>Immutable / Unique <br/> C.si<br/>Immutable / Shared"]
+    A_s((Class A <br/> Shared)) -- shared --> Bb_si_ui["si<br/>Immutable / Shared <br/> ui<br/>Immutable / Unique"]
+    A_s -- havoc --> Bb_sm_um["sm<br/>Mutable / Shared <br/> um<br/>Mutable / Unique"]
 
 
-  subgraph B_sm_si[" "]
-      B_sm["A.sm<br/>Mutable / Shared"]
-      B_si["A.si<br/>Immutable / Shared"]
-  end
-    A -- havoc --> B_sm
-    A -- shared --> B_si
-    
-    B_sm_si -- havoc --> C_um_sm["B.um<br/>Mutable / Unique <br/> B.sm<br/>Mutable / Shared"]
-    B_sm_si -- shared --> C_ui_si["B.ui<br/>Immutable / Unique <br/> B.si<br/>Immutable / Shared"]
-    
-    C_um_sm -.-> rec2(Start at A.sm/A.si)
-    
-    C_ui_si -.-> rec2
+    B_um_ui -.-> info23("Equivalent with A Unique")
 
-subgraph Legend ["Uniquness Types"]
-        direction TB
-    Shared["Shared"]
-    Unique["Unique"]
+
+
+    A_u -- shared --> B_sm_si["sm<br/>Mutable / Shared <br/>si<br/>Immutable / Shared"]
+
+    Bb_si_ui -.-> info5(Equivalent with A Shared)
+    Bb_sm_um -.-> info6(Equivalent with A Shared)
+    B_sm_si -.-> info4(Equivalent with A Shared)
+        subgraph Legend ["Uniquness Types"]
+                direction TB
+            Shared["Shared"]
+            Unique["Unique"]
     end
 
     %% ANCHOR THE LEGEND
     %% Use ~~~ for an invisible link to Class A to keep it nearby
-    C_um_sm ~~~ Legend
+    info23 ~~~ Legend
 
 
 
@@ -94,22 +63,31 @@ classDef shared fill:red
 
 class Shared shared
 class Unique unique
-class A unique
+class A_u unique
+class A_s shared
 class B_um_ui unique
 class C_um_ui unique
 class B_sm shared
 class C_sm shared
 class C_si shared
 class B_si shared
-class C_um_sm shared
-class C_ui_si shared
+class B_sm_si shared
+%% class C_um_sm shared
+%% class C_ui_si shared
 class D1 shared
 class D9 shared
 class D10 shared
+class Bb_si shared
+class Bb_ui shared
+class Bb_sm shared
+class Bb_um shared
+class Bb_si_ui shared
+class Bb_sm_um shared
+
 ```
 
 #### Mealy State Machine
-The way to get the necessary actions can be expressed as a Mealy state machine. The input is the accessed path. The action `unfold` mean, that we need to unfold the path that was read so far (without the field that is responsible for the transmission).
+The way to get the necessary actions can be expressed as a Mealy state machine. The input is the accessed path. The action `unfold` mean, that we need to unfold the path that was read so far (without the field that is responsible for the transmission). Thi first transmission is performed according to the uniquness of the receiver.
 
 
 ```mermaid
@@ -138,8 +116,7 @@ graph LR
     C -.-> Unique
     
     %% Bridging Transitions
-    Unique -->|Shared Mutable <br/> havoc| Shared
-    Unique -->|Shared Immutable <br/> Unfold-Shared| Shared
+    Unique -->|Shared <br/> Unfold-Shared| Shared
 
     %% Transitions for Shared
     Shared --Immutable <br/> Unfold-Shared--> B
@@ -148,6 +125,59 @@ graph LR
     B -.-> Shared
 ```
 (Due to an issue with the rendering engine, useless nodes were inserted)
+
+## Takeaways
+- If the reciever is shared, we will never unfold a unique predicate. This is convienient, because the shared predicates do not need to be folded back.
+- All the unique predicates that need to be unfolded are always in the beginning of the path. It can not happen that for a single path we have a unfolding pattern like this: unfold-Unique ... unfold-Shared ... unfold-Unique
+
+
+## When to Unfold
+The fundamental difference between the shared and unique predicate is, that the shared can be unfolded as many times. Therefore with the shared predicate we can be much less careful and also perform strictly speaking unnecessary unfolds.
+
+The issue with unique predicates is the following. Assume that everything is unique. We provide two code snippets:
+```kotlin
+// first
+var b = (root.left == null)
+
+// second
+var tmp = root.left
+```
+In the first snippet we want to unfold `unique(root)` once and the fold it back. In the second snippet we only want to unfold `unique(root)`.
+To know wheather the predicate must be fold back, we need to know if after the access it is moved or not. This information comes from the CFG flow analysis. To be able to use them here we need to translate the flow analysis information first into the fir AST and then into the expEmbeddings. The mapping from fir Elements to CFG nodes is one to many. If we reverse the this mapping and store the first and last node for each fir Element, we will know which paths are moved/owned before and after each fir Element. The problem is when the an path becomes moved. In the second snipped `root.left` does not mecome moved after the `root.left` but only after the assignment. This makes sense, because in the first example `root.left` should never become moved.
+
+The conclusion is, that we can not unfold the unique predicates on the field access level, because in the first snippet we are suppost to fold it back, whereas in the second we are not. However the information available on the field embedding level is the same for each snippet.
+
+
+# Unfolding Strategy
+
+The unfolding strategy is divided into two parts: The **Shared Unfolding** part and the **Unique Unfolding** part.
+
+## Shared Unfolding
+This contains all the field accesses that either require the shared predicate or a havoc call. This potential unfolds can be inserted on the field access level. Also it is not possible to perform this earlier. Because if the traversal of the path contains a havoc call, the result will be stored in a anonyous variable. This variable will only be known, once the call is inserted. So the unfold of shared predicates, where the shared predicate comes from the havoc call, must be inserted on the field access level.
+
+## Unique Unfolding
+This contains all the unique predicate unfolds. This will be performed on the statement level. On the statement level the following is done:
+1. Extract all the used paths (we refer to them as "used paths")
+2. Use the result of the uniqueness analysis and the Mearly FSM to associate each field access of each used path with an action.
+3. Extract all the prefixes which contain only `Unfold-Unique` actions.
+4. Make them unique and order them according to their length
+5. Insert the unfold statements.
+
+
+
+
+# Unique Folding Strategy
+
+In the folding strategy we only need to consider unique predicates. Because the shared predicates are unfodled with wildcard permission, which means we still have access to the predicate.
+The folding strategy works closely together with the Unique Unfolding strategy.
+1. Get all the used paths
+2. Extract all the prefixes which are unique and not partially moved
+3. Order the prefixes by their length starting with the longest.
+4. Add fold statements for the corresponding unique predicate.
+
+
+# Outdated
+
 
 ## Prerequisites
 - To unfold and fold correctly, we need information from the uniqueness checker. This includes:
@@ -265,23 +295,23 @@ A
 Example 1. Deep to Shallow
 ````kotlin
 // partially moved: {}
-// 1. extracted paths: {A.first.first}
-// 2. without last: {A.first}
+// 1. extracted paths: {first.first}
+// 2. without last: {first}
 // 3. done
-// 4. unfold (A), unfold (A.first)
-var x = A.first.first // 5.
-// 6. partially moved: {A.first}
+// 4. unfold (A), unfold (first)
+var x = first.first // 5.
+// 6. partially moved: {first}
 // 8. done, 9. done
 
 // continues
 
-// partially moved: {A.first}
-// 1. extract paths: {A.first}
+// partially moved: {first}
+// 1. extract paths: {first}
 // 2. without last: {A}
 // 3. done
-// 4. A is already unfolded (since A.first is partially moved)
-A.first = x
-// written to: A.first, without last: A
+// 4. A is already unfolded (since first is partially moved)
+first = x
+// written to: first, without last: A
 // partially moved: {}
 // A is not partially moved anymore
 fold(A)
@@ -289,23 +319,23 @@ fold(A)
 Example 2
 ````kotlin
 // partially moved: {}
-// 1. extracted paths: {A.first.first}
-// 2. without last: {A.first}
+// 1. extracted paths: {first.first}
+// 2. without last: {first}
 // 3. done
-// 4. unfold (A), unfold (A.first)
-var x = A.first.first // 5.
-// 6. partially moved: {A.first}
+// 4. unfold (A), unfold (first)
+var x = first.first // 5.
+// 6. partially moved: {first}
 // 8. done, 9. done
 
 // continues
 
-// partially moved: {A.first}
-// 1. extract paths: {A.first, x.first}
+// partially moved: {first}
+// 1. extract paths: {first, x.first}
 // 2. without last: {A, x}
 // 3. done
 // 4. unfold (x)
-A.first = x.first
-// written to: A.first, without last: A
+first = x.first
+// written to: first, without last: A
 // partially moved: {x}
 // A is not partially moved anymore
 // fold(A)
@@ -313,43 +343,43 @@ A.first = x.first
 Example 3
 ````kotlin
 // partially moved: {}
-// 1. extracted paths: {A.first.first}
-// 2. without last: {A.first}
+// 1. extracted paths: {first.first}
+// 2. without last: {first}
 // 3. done
-// 4. unfold(A) unfold(A.first)
-A.first.first = A()
-// written to: A.first.first, without last: A.first
+// 4. unfold(A) unfold(first)
+first.first = A()
+// written to: first.first, without last: first
 // partially moved: none
-fold(A.first)
+fold(first)
 fold(A)
 ````
 Example 4
 ````kotlin
 // partially moved: {}
-// extracted path: A.first.first, without last: A.first, 
-// unfold(A), unfold(A.first)
-var x = a.first.first
-// partially moved: A.first
+// extracted path: first.first, without last: first, 
+// unfold(A), unfold(first)
+var x = first.first
+// partially moved: first
 
 
-// path: A.first.second, without last: A.first
-// since A.first is partially moved, we do not need to unfold it.
-var y = a.first.second
-// partially moved: A.first
+// path: first.second, without last: first
+// since first is partially moved, we do not need to unfold it.
+var y = first.second
+// partially moved: first
 // no written to path
 
-// path: A.first.first, without last: A.first, nothing to fold
-// partially moved: a.first
-a.first.first = A()
-// written to: a.first.first, without last: a.first
-// partially moved: A.first, nothing to fold
+// path: first.first, without last: first, nothing to fold
+// partially moved: first
+first.first = A()
+// written to: first.first, without last: first
+// partially moved: first, nothing to fold
 
 
-// path: A.first.second, without last: A.first, nothing to fold
-a.first.second = y
+// path: first.second, without last: first, nothing to fold
+first.second = y
 // partially moved: none
-// path: A.first.second, without last: A.first
-// fold(A.first)
+// path: first.second, without last: first
+// fold(first)
 // fold(A)
 ````
 
