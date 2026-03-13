@@ -108,9 +108,38 @@ class D9 shared
 class D10 shared
 ```
 
+#### Mealy State Machine
+The way to get the necessary actions can be expressed as a Mealy state machine. The input is the accessed path. The action `unfold` mean, that we need to unfold the path that was read so far (without the field that is responsible for the transmission).
 
 
+```mermaid
+graph LR
+    %% Node Definitions
+    Start((Start))
+    Unique([Unique])
+    Shared([Shared])
 
+    %% Styling
+    %% style Start fill:#f9f,stroke:#333,stroke-width:2px
+    %% style Unique fill:#dfd,stroke:#080,stroke-width:2px
+    %% style Shared fill:#ddf,stroke:#008,stroke-width:2px
+
+    %% Initial Transitions
+    Start -->|Unique/_| Unique
+    Start -->|Shared/_| Shared
+
+    %% Transitions for Unique
+    Unique -->|Unique Mutable <br/> Unfold-Unique| Unique
+    Unique -->|Unique Immutable <br/> Unfold-Unique| Unique
+    
+    %% Bridging Transitions
+    Unique -->|Shared Mutable <br/> havoc| Shared
+    Unique -->|Shared Immutable <br/> Unfold-Shared| Shared
+
+    %% Transitions for Shared
+    Shared -->|Immutable <br/> Unfold-Shared| Shared
+    Shared -->|Mutable <br/> havoc| Shared
+```
 
 ## Prerequisites
 - To unfold and fold correctly, we need information from the uniqueness checker. This includes:
