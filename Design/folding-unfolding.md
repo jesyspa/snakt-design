@@ -1,56 +1,115 @@
 # Predicates folding/unfolding
 
 ## Expected Behaviour
+Deciding what has to be unfolded can be quite involved. The following classes should include most cases.
+
+```kotlin
+class A(
+    @Unique @Borrowed var mu : B,
+    @Unique val iu : B,
+    @Unique @Borrowed var ms : B,
+    val is : B
+)
+
+class B(
+    @Unique @Borrowed var mu : C,
+    @Unique val iu : C,
+    @Unique @Borrowed var ms : C,
+    val is : C
+)
+
+class C(
+    @Unique @Borrowed var mu : Any,
+    @Unique val iu : Any,
+    @Unique @Borrowed var ms : Any,
+    val is : Any
+)
+```
+
+We use the following abbreviations:
+- um: Unique and Mutable
+- ui: Unique and Immutable
+- sm: Shared and Mutable
+- si: Shared and Immutable
+
+
+### Floatchart
+This is how the diagram should be read:
+- The color of the nodes is the result of the uniquness type system.
+- Every node represent an object and how it can be accessed. For example: The node `A.um` represent an object `B` which was accessed through the field `mu` of object `A`.
+- The Uniqueness Type text inside the box, is the declared uniqueness type of the field.
+- The arrow from `A -action-> A.field`, means what action needs to be performed to access `A.field`.
+- To access a deeper field, follow the arrows and execute the actions in the order of traversal.
+- To not let the diagram explode we use dotted arrows, to indicate that we reached a situation which is very similar to a already seen one.
+
 
 ```mermaid
 graph LR
-    A[Class A <br> Unique] -- unique --> B_mu_iu["A.mu<br/>Mutable / Unique <br/> "A.iu<br/>Immutable / Unique""]
+    A[Class A] -- unique --> B_um_ui["A.um<br/>Mutable / Unique <br/> "A.ui<br/>Immutable / Unique""]
     
-    B_mu_iu -- unique --> C_mu_ui["B.mu<br/>Mutable / Unique <br/> B.ui<br/>Immutable / Unique"]
+    B_um_ui -- unique --> C_um_ui["B.um<br/>Mutable / Unique <br/> B.ui<br/>Immutable / Unique"]
 
-  subgraph C_ms_is[" "]
-    C_ms["B.ms<br/>Mutable / Shared"]
-    C_is["B.is<br/>Immutable / Shared"]
+  subgraph C_sm_si[" "]
+    C_sm["B.sm<br/>Mutable / Shared"]
+    C_si["B.si<br/>Immutable / Shared"]
   end
 
-    B_mu_iu -- havoc  --> C_ms["B.ms<br/>Mutable / Shared"]
-    B_mu_iu -- shared --> C_is["B.is<br/>Immutable / Shared"]
+    B_um_ui -- havoc  --> C_sm["B.sm<br/>Mutable / Shared"]
+    B_um_ui -- shared --> C_si["B.si<br/>Immutable / Shared"]
     
-    C_mu_ui -.-> rec1(Start at A.mu/A.iu)
+    C_um_ui -.-> rec1(Start at A.um/A.ui)
 
-    C_ms_is -- havoc --> D9["C.mu<br/>Mutable / Unique <br/> C.ms<br/>Mutable / Shared"]
-    C_ms_is -- shared --> D10["C.ui<br/>Immutable / Unique <br/> C.is<br/>Immutable / Shared"]
+    C_sm_si -- havoc --> D9["C.um<br/>Mutable / Unique <br/> C.sm<br/>Mutable / Shared"]
+    C_sm_si -- shared --> D10["C.ui<br/>Immutable / Unique <br/> C.si<br/>Immutable / Shared"]
 
 
-  subgraph B_ms_is[" "]
-      B_ms["A.ms<br/>Mutable / Shared"]
-      B_is["A.is<br/>Immutable / Shared"]
+  subgraph B_sm_si[" "]
+      B_sm["A.sm<br/>Mutable / Shared"]
+      B_si["A.si<br/>Immutable / Shared"]
   end
-    A -- havoc --> B_ms
-    A -- shared --> B_is
+    A -- havoc --> B_sm
+    A -- shared --> B_si
     
-    B_ms_is -- havoc --> C_mu_ms["B.mu<br/>Mutable / Unique <br/> B.ms<br/>Mutable / Shared"]
-    B_ms_is -- shared --> C_iu_is["B.iu<br/>Immutable / Unique <br/> B.is<br/>Immutable / Shared"]
+    B_sm_si -- havoc --> C_um_sm["B.um<br/>Mutable / Unique <br/> B.sm<br/>Mutable / Shared"]
+    B_sm_si -- shared --> C_ui_si["B.ui<br/>Immutable / Unique <br/> B.si<br/>Immutable / Shared"]
     
-    C_mu_ms -.-> rec2(Start at A.ms/A.is)
+    C_um_sm -.-> rec2(Start at A.sm/A.si)
     
-    C_iu_is -.-> rec2
+    C_ui_si -.-> rec2
+
+subgraph Legend ["Uniquness Types"]
+        direction TB
+    Shared["Shared"]
+    Unique["Unique"]
+    end
+
+    %% ANCHOR THE LEGEND
+    %% Use ~~~ for an invisible link to Class A to keep it nearby
+    C_um_sm ~~~ Legend
+
 
 
 classDef unique fill:blue
 classDef shared fill:red
 
+class Shared shared
+class Unique unique
 class A unique
-class B_mu_iu unique
-class C_mu_ui unique
-class B_ms shared
-class C_ms shared
-class C_is shared
-class B_is shared
-class C_mu_ms shared
-class C_iu_is shared
+class B_um_ui unique
+class C_um_ui unique
+class B_sm shared
+class C_sm shared
+class C_si shared
+class B_si shared
+class C_um_sm shared
+class C_ui_si shared
 class D1 shared
+class D9 shared
+class D10 shared
 ```
+
+
+
 
 
 ## Prerequisites
