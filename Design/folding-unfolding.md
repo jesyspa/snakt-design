@@ -1,8 +1,67 @@
 # Predicates folding/unfolding
+
+## Expected Behaviour
+
+```mermaid
+graph LR
+    A[Class A <br> Unique] -- unique --> B_mu_iu["A.mu<br/>Mutable / Unique <br/> "A.iu<br/>Immutable / Unique""]
+    
+    B_mu_iu -- unique --> C_mu_ui["B.mu<br/>Mutable / Unique <br/> B.ui<br/>Immutable / Unique"]
+
+  subgraph C_ms_is[" "]
+    C_ms["B.ms<br/>Mutable / Shared"]
+    C_is["B.is<br/>Immutable / Shared"]
+  end
+
+    B_mu_iu -- havoc  --> C_ms["B.ms<br/>Mutable / Shared"]
+    B_mu_iu -- shared --> C_is["B.is<br/>Immutable / Shared"]
+    
+    C_mu_ui -.-> rec1(Start at A.mu/A.iu)
+
+    C_ms_is -- havoc --> D9["C.mu<br/>Mutable / Unique <br/> C.ms<br/>Mutable / Shared"]
+    C_ms_is -- shared --> D10["C.ui<br/>Immutable / Unique <br/> C.is<br/>Immutable / Shared"]
+
+
+  subgraph B_ms_is[" "]
+      B_ms["A.ms<br/>Mutable / Shared"]
+      B_is["A.is<br/>Immutable / Shared"]
+  end
+    A -- havoc --> B_ms
+    A -- shared --> B_is
+    
+    B_ms_is -- havoc --> C_mu_ms["B.mu<br/>Mutable / Unique <br/> B.ms<br/>Mutable / Shared"]
+    B_ms_is -- shared --> C_iu_is["B.iu<br/>Immutable / Unique <br/> B.is<br/>Immutable / Shared"]
+    
+    C_mu_ms -.-> rec2(Start at A.ms/A.is)
+    
+    C_iu_is -.-> rec2
+
+
+classDef unique fill:blue
+classDef shared fill:red
+
+class A unique
+class B_mu_iu unique
+class C_mu_ui unique
+class B_ms shared
+class C_ms shared
+class C_is shared
+class B_is shared
+class C_mu_ms shared
+class C_iu_is shared
+class D1 shared
+```
+
+
 ## Prerequisites
 - To unfold and fold correctly, we need information from the uniqueness checker. This includes:
   - Knowing if the receiver of field access is shared or unique.
   - For a given path, is the corresponding object partially moved.
+
+
+
+
+
 
 ## General Remarks
 - The main problem is to know when to keep a unique-predicate unfolded and when to fold it back.
@@ -32,7 +91,7 @@ Folding is closely related to field access. Therefore, we provide an overview of
 effects of such a write are preserved.
 
 
-We will now go through every access policy and explain the corresponding folding mechanisms.
+We will now go through every access policy and explain the corresponding folding mechanimss.
 
 ### ALWAYS_READABLE
 These are all immutable fields. Hence, we only need to consider reading such fields.
