@@ -118,6 +118,11 @@ graph LR
     Start((Start))
     Unique([Unique])
     Shared([Shared])
+    A([ ])
+    B([ ])
+    C([ ])
+
+
 
     %% Styling
     %% style Start fill:#f9f,stroke:#333,stroke-width:2px
@@ -125,21 +130,24 @@ graph LR
     %% style Shared fill:#ddf,stroke:#008,stroke-width:2px
 
     %% Initial Transitions
-    Start -->|Unique/_| Unique
-    Start -->|Shared/_| Shared
+    Start --Unique/_--> Unique
+    Start --Shared/_--> Shared
 
     %% Transitions for Unique
-    Unique -->|Unique Mutable <br/> Unfold-Unique| Unique
-    Unique -->|Unique Immutable <br/> Unfold-Unique| Unique
+    Unique -->|Unique <br/> Unfold-Unique| C
+    C -.-> Unique
     
     %% Bridging Transitions
     Unique -->|Shared Mutable <br/> havoc| Shared
     Unique -->|Shared Immutable <br/> Unfold-Shared| Shared
 
     %% Transitions for Shared
-    Shared -->|Immutable <br/> Unfold-Shared| Shared
-    Shared -->|Mutable <br/> havoc| Shared
+    Shared --Immutable <br/> Unfold-Shared--> B
+    Shared --Mutable <br/> havoc--> A
+    A -.-> Shared
+    B -.-> Shared
 ```
+(Due to an issue with the rendering engine, useless nodes were inserted)
 
 ## Prerequisites
 - To unfold and fold correctly, we need information from the uniqueness checker. This includes:
