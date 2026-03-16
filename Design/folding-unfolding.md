@@ -27,9 +27,10 @@ The diagram should be read as follows:
 * The color of the nodes is the result of the uniqueness type system.  
 * Circles represent objects, while rectangles represent the fields of those objects.  
 * The Uniqueness Type text inside a box is the declared uniqueness type of that field.  
-* An arrow from ``object -action-> field`` indicates the `action` required to access that `field` on the `object`.  
+* An arrow from ``object -action-> field`` indicates the `action` (unfold the predicate, or havoc the field access) required to access that `field` on the `object`.  
 * To access a deeper field, follow the arrows and execute the actions in the order of traversal.  
-* To prevent the diagram from becoming too large, we use dotted arrows to indicate that we have reached a state equivalent to one already seen.
+* To prevent the diagram from becoming too large, we use dotted arrows to indicate a state equivalent to one already shown. For example: the notation ``object -.-> Equivalent with "other-object"`` means that accessing a field on ``object`` results in a situation indistinguishable from ``other-object``. In other words: the tree could be extended by adding the children ``of other-object`` as children of ``object``.
+
 ```mermaid
 graph LR
     A_u((Class A <br/> Unique)) -- unique --> B_um_ui["um<br/>Mutable / Unique <br/> ui<br/>Immutable / Unique"]
@@ -59,8 +60,8 @@ graph LR
 
 
 
-classDef unique fill:blue
-classDef shared fill:red
+classDef unique fill:none,stroke:blue,stroke-width:4px
+classDef shared fill:none,stroke:red,stroke-width:4px
 
 class Shared shared
 class Unique unique
@@ -133,7 +134,7 @@ graph LR
 
 ## Takeaways
 
-* If the receiver is shared, we will never unfold a unique predicate. This is convenient because shared predicates do not need to be folded back.  
+* If the receiver is shared, we will never unfold a unique predicate. Meaning that while traversing a path, once we reached a shared state, we will never unfold a unique predicate on that path. This is convenient because once we reached a shared receiver the accessing becomes trivial. We can always either havoc or unfold the shared predicate. There is no need to worry about folding back, as shared predicates have wildcard permissions and will, therefore, remain available after unfolding.
 * All unique predicates that require unfolding are always at the beginning of the path. It is impossible for a single path to have an unfolding pattern like: *unfold-Unique ... unfold-Shared ... unfold-Unique*.
 
 ## When to Add the Fold/Unfold Statements
