@@ -221,6 +221,23 @@ method field_open(this: Ref) returns (ret: Ref)
 function field_closed(this: Ref) returns (ret: Ref)
 ```
 
-With this approach every read could be just a call to the method. And properties could be verified that requires some relation between two reads where in between type information was updated.
+With this approach every read could be just a call to the method. And properties could be verified that requires some relation between two reads where in between type information was updated. The program would simplify to this:
+
+```
+method test(x: Ref)
+    requires subtype(x, Test)
+    {
+        var r1 := field_open(x)
+
+        if () {
+            // Mutable
+            var r2 := field_open(x)
+        }
+        if () {
+            // Immutable
+            var r2 := field_open(x)
+        }
+    }
+```
 
 Additionally, this might also allow us to remove the havoc methods. Because we want to apply the havoc method exactly then, when the field we access is mutable and from a shared object. In this case, we will never hold write permissions to that field, meaning the third precondition will teach us nothing about the value of `ret`.
