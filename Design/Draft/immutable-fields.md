@@ -255,4 +255,4 @@ method test(x: Ref)
 ```
 An Additional benefit is, that this would remove the need of a havoc method. Because if the object is shared, then no permissions are available and therefore the method call gives no information about the value of the return type.
 
-I put together the code for this example and showed how some things could be verified. I used the viper online tool from ETH.  [HERE](https://viper.ethz.ch/viperonline/tool/silver?key=20260414181255ff2512377d325bc4de2d51]
+I put together the code for this example and showed how some things could be verified. I used the viper online tool from ETH.  [HERE](https://viper.ethz.ch/viperonline/tool/silver?key=20260414181255ff2512377d325bc4de2d51)
