@@ -28,11 +28,9 @@ class A(val field: Int)
 
 ```viper
 function field_closed(rec: Ref) returns (ret: Ref)
-    requires subtype(rec, A)
     ensures subtype(ret, Int)
 
 method constructor_A(f_param: Ref) returns (res: Ref)
-    ensures res != null && isType(res, A)
     ensures field_closed(res) == f_param
 ```
 
@@ -66,8 +64,6 @@ Since the types can be covariantely overwritten, we need to make sure that the n
 
 method sides_open(this: Ref) returns (ret: Ref)
     ensures subtype(ret, Int) // default, because of open
-    ensures subtype(this, Triangle) ==> subtype(ret, Int)
-    ensures subtype(this, Square) ==> subtype(ret, Int)
 
 function sides_closed(this: Ref) returns (ret: Ref)
     ensures subtype(this, Triangle) ==> subtype(ret, Int)
@@ -105,7 +101,6 @@ We need to add the type information as a postcondition to the method/function.
 // Method for the open base class
 method ingredient_open(this: Ref) returns (ret: Ref)
     ensures subtype(ret, Meat)
-    ensures subtype(this, SalamiSandwich) ==> subtype(ret, Salami)
 
 // Function for the closed subclass access
 function ingredient_closed(this: Ref) returns (ret: Ref)
@@ -137,18 +132,15 @@ fun test(x: Test) {
     }
 }
 ```
-
+In this example we show, how based on the static type we decide which construct to use.
 
 ```viper
 field f_Mutable: Ref
 
 method field_open(this: Ref) returns (ret: Ref)
     ensures subtype(ret, Int)
-    ensures subtype(this, Mutable) ==> subtype(ret, Int)
-    ensures subtype(this, Immutable) ==> subtype(ret, Int)
 
 function field_closed(this: Ref) returns (ret: Ref)
-    ensures subtype(this, Immutable) ==> subtype(ret, Int)
 
 method test(x: Ref)
     requires subtype(x, Test)
@@ -168,27 +160,43 @@ method test(x: Ref)
 
 
 ## Idea: Read is Always a Method Call
-At the moment there is a missing connection between multiple reads if the type information in between changed. For example in the example above the equality `r1 == r2` should hold. However at the moment this would not verify. 
 
-A solution would be, to add the known subtype cases to the method for the field access. In the above example this, then would change to:
+### Problem 1
+When we perform a smart cast or simlar, we do not get information over the cast. The following program will fail to verify
+
+```kotlin
+fun test(x: Test) {
+    val r1 = x.field
+    when(x){
+        is Mutable -> x.field
+        is Immutable -> {
+            val r2 = x.field
+            verify(r1==r2) // this will fail, because we are missing information from the first read.
+            }
+    }
+}
+```
+
+
+At the moment there is a missing connection between multiple reads if the type information in between changed. Respectively, when we use the `field_open` read, we learn nothing about the the potential values of different types. For example in the example above the equality `r1 == r2` should hold. However at the moment this would not verify. 
+
+### Suggestion 1: Add Subtype Distinction in Open Read Method
+A solution would be, to add the known (final) subtype cases to the method for the field access. The above example would change to this:
 
 ```
 field f_Mutable: Ref
 
 method field_open(this: Ref) returns (ret: Ref)
-    ensures subtype(ret, Int)
-    ensures subtype(this, Mutable) ==> subtype(ret, Int)
+    ensures subtype(ret, Int) // default for potentially unknown subclasses
     ensures subtype(this, Immutable) ==> subtype(ret, Int)
     ensures subtype(this, Immutable) ==> ret == field_closed(this)
 
 function field_closed(this: Ref) returns (ret: Ref)
 ```
 
-With this approach the `field_closed` function would never require to be called explicitely. We can also remove the postcondition from the function, since this information is now also given by the `method`.
+With this approach the `field_closed` function would never require to be called explicitely. We can also remove the postcondition from the function, since this information is now also given by the `field_open` method.
 
-So the `test` function would be translated into: 
-
-(of course the `field_open` method could be renamed)
+So the `test` function would be routhly translated into: 
 ```
 method test(x: Ref)
     requires subtype(x, Test)
@@ -206,8 +214,14 @@ method test(x: Ref)
     }
 ```
 
-But still, the field access for the `Mutable` is not elegant. But this could also be added to the `field_open` method:
+### Problem 2: Mutable fields
+About the same problem remains as before just only for mutable fields. In the case, where `x` is unique and we want to assert that `r1` and `r2` are equal, it will fail. 
 
+### Suggestion 2: All Read Accesses are Method Calls
+
+We could also add postconditions for final mutable fields, that say, if it is of this type and the receiver has write permissions(which means that it is unique), then the result will be the same as in the viper field.
+
+This would then look like this:
 ```viper
 field f_Mutable: Ref
 
@@ -239,5 +253,6 @@ method test(x: Ref)
         }
     }
 ```
+An Additional benefit is, that this would remove the need of a havoc method. Because if the object is shared, then no permissions are available and therefore the method call gives no information about the value of the return type.
 
-Additionally, this might also allow us to remove the havoc methods. Because we want to apply the havoc method exactly then, when the field we access is mutable and from a shared object. In this case, we will never hold write permissions to that field, meaning the third precondition will teach us nothing about the value of `ret`.
+I put together the code for this example and showed how some things could be verified. I used the viper online tool from ETH.  [HERE](https://viper.ethz.ch/viperonline/tool/silver?key=20260414181255ff2512377d325bc4de2d51]
