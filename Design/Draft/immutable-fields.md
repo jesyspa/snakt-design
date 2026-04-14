@@ -1,112 +1,98 @@
-# Immutable fields
-The general idea is to represent immutable field as viper functions. Viper function are pure, hence when reading from a field, the same result will be returned.
+# Kotlin Immutable Fields in Viper
+The core goal is to map Kotlin fields to Viper based on whether they are stable (pure) or heap-dependent. By using the static type at the access point, we decide whether to use a Viper function, a method, or a direct field access.
 
-This has the advantage, that we do not need to care about permissions.
+## Stability through Viper Functions
+For fields that are guaranteed to be immutable and final (closed), we use Viper functions.
+- Advantage: Functions are pure and do not require heap permissions (acc) to evaluate.
+- Construction: The relationship between the constructor argument and the field is established in the constructor's postcondition: `ensures A_field(res) == field_val`.
+- Subtype Specificity: For covariant overrides, the function uses implications to refine the return type: `ensures subtype(this, SubClass) ==> subtype(result, SpecificType)`
+
+## Static Type Dispatch Logic
+Instead of generating complex ternary case distinctions at every call site, the verifier chooses the access method based on the static type of the field.
+
+
+| Field Characteristic (at Static Type) 	| Viper Construct 	| Reasoning                                                                                                                	|
+|---------------------------------------	|-----------------	|--------------------------------------------------------------------------------------------------------------------------	|
+| Closed val                            	| Function Call   	| The value is stable and guaranteed not to be overridden by a mutable implementation.                                     	|
+| Open val                              	| Method Call     	| Since it's open, a subclass might implement it with a custom getter or a var, requiring a method to abstract the access. 	|
+| Closed var                            	| Viper Field     	| Direct heap access is used. This requires the verifier to manage permissions (acc(a.f)).                                 	|
+| Open var                              	| Method Call     	| To support dynamic dispatch and potential setters in subclasses, we wrap the access in a method.                         	|
+
+## Limitations
+- Non-Sealed Structures: <br>
+Overridable val fields on non-sealed structures generally cannot be pure functions because they might be overridden by a var in a subclass, which is inherently heap-dependent.
+- Manual Logic: <br>Custom getters and setters are always translated into Viper methods to account for the logic inside the get() and set() blocks.
+- Verification Limitations:<br> Under this static-type-based approach, certain proofs (like verifying that x == y after a smart cast from a base interface to a specific class) may not be supported by default if the base access was a method and the specific access is a function.
+
+
 
 ## Examples
-### Simple
-The most simplest example would look like this:
-```kotlin
-class A() {
-    val field : Int = 5
-}
-```
-When translating to viper, the result should look like this:
 
-```viper
-function A_field(rec: Ref) returns (ret : Ref)
-    requires subtype(rec, A)
-    ensres subtype(ret, Int)
-```
-
-Note: How could we use the fact that the value is statically known? This should verify 
-```kotlin
-fun main() {
-    val a = A()
-    verify(a.field == 5)
-}
-```
-
-
-### Multiple Classes with equal Name
-```kotlin
-class A() {
-    val field : Int = 5
-}
-class B() {
-    val field : Int = 6
-}
-```
-This could be handled with two viper functions, but even with one it would be possible. This however only works, because they have the same type (Int).
-
-
-### Construction
-
+### Constructor
 ```kotlin
 class A(val field: Int)
-
-fun main() {
-    val a = A(5)
-}
 ```
-When fields appear in the constructor, then the postcondition of the constructor should ensure, that the value is preserved.
 
 ```viper
-method constructorA(field: Ref) returns (ret: Ref) 
-    ensures A_field(ret) = field
+function field_closed(rec: Ref) returns (ret: Ref)
+    requires subtype(rec, A)
+    ensures subtype(ret, Int)
+
+method constructor_A(f_param: Ref) returns (res: Ref)
+    ensures res != null && isType(res, A)
+    ensures field_closed(res) == f_param
 ```
 
-multiple constructors should not be an issue, since just the equality must be added to the postcondition.
-
-
-### Inheritance
-General Idea:
-- if a field can not be overwritten, it get its function.
-- otherwhise it gets a method? 
+### Dynamic Dispatch Open Val
+When a field is open, it might be overridden by a var or a custom getter in a subclass. At the call site, if the static type is the open class, we must use a Viper Method to allow for this potential dynamic behavior.
 
 ```kotlin
-open class Shape {
+open class Shape{
     open val sides: Int = 0
 }
-
-class Triangle : Shape() {
-    override val sides: Int = 3
+class Triangle() : Shape() {
+    override val sides : Int = 3
 }
 
-class Square : Shape() {
+class Square() : Shape() {
     override val sides: Int = 4
 }
+
+fun main(x: Shape) {
+    val s1 = x.sides
+    if (x is Triangle) {
+        val s2 = s.sides
+    }
+}
 ```
 
+This should generate the following viper code
 ```viper
-function shape_size(this: Ref) returns (ret: Ref) 
-    ensures subtype(ret, Int)
+
+method sides_open(this: Ref) returns (ret: Ref)
+    ensures subtype(ret, Int) // default, because of open
+    ensures subtype(this, Triangle) ==> ret == sides_closed(this)
+    ensures subtype(this, Square) ==> ret == sides_closed(this)
+
+function sides_closed(this: Ref) returns (ret: Ref)
+    ensures subtype(this, Triangle) ==> subtype(ret, Int)
+    ensures subtype(this, Square) ==> subtype(ret, Int)
+
+method main(x: Ref) {
+    var s1 := sides_open(x)
+    if (...) {
+        var s2 := sides_closed(x)
+    }
+}
 ```
 
+
+### Covariant Overwrites
 ```kotlin
-fun test() {
-    val t = Triangle()
-    t.sides // get's translated into call to `shape_size`
-}
+open class Meat
+class Salami : Meat()
 
-fun unknown(s: Shape) {
-    s.sides
-    // What should happen here? Do we need a "dynamic dispatch method?"
-}
-```
-
-
-
-### Overriding with more specific type
-
-```kotlin
-open class Meat()
-
-class Salami() : Meat()
-class Ham() : Meat()
-class Beef() : Meat()
-
-open class Sandwich() {
+open class Sandwich {
     open val ingredient: Meat = Meat()
 }
 
@@ -114,139 +100,71 @@ class SalamiSandwich : Sandwich() {
     override val ingredient: Salami = Salami()
 }
 
-class HamSandwich : Sandwich() {
-    override val ingredient: Ham = Ham()
-}
-
-class BeefSandwich : Sandwich() {
-    override val ingredient: Beef = Beef()
+fun test(s: SalamiSandwich) {
+    val i = s.ingredient 
 }
 ```
 
-
 ```viper
-function Sandwich_ingredient(this: Ref) returns (ret: Ref)
+// Method for the open base class
+method ingredient_open(this: Ref) returns (ret: Ref)
+    ensures subtype(ret, Meat)
+    ensures subtype(this, SalamiSandwich) ==> ret == ingredient_closed(this)
+
+// Function for the closed subclass access
+function ingredient_closed(this: Ref) returns (ret: Ref)
     ensures subtype(this, SalamiSandwich) ==> subtype(ret, Salami)
-    ensures subtype(this, HamSandwich) ==> subtype(ret, HamSandwich)
-    ensures subtype(this, BeefSandwich) ==> subtype(ret, BeefSandwich)
-    ensures subtype(ret, Meat) // base case
-```
 
-Problems:
-- must know all the subtypes, is this something we want to be capeable off?
-
-
-```kotlin
-open class Meat()
-
-class Salami() : Meat()
-class Ham() : Meat()
-class Beef() : Meat()
-
-sealed class Sandwich() {
-    open val ingredient: Meat = Meat()
-}
-
-class SalamiSandwich : Sandwich() {
-    override val ingredient: Salami = Salami()
-}
-
-class HamSandwich : Sandwich() {
-    override val ingredient: Ham = Ham()
-}
-
-class BeefSandwich : Sandwich() {
-    override val ingredient: Beef = Beef()
-}
-
-fun test(a: Sandwich) {
-    val i = a.ingredient
-    // do some stuff
-    val ii = a.ingredient
-    verify(i == ii) 
+method test(s: Ref) {
+    requires subtype(s, SalamiSandwich)
+    // Static type is SalamiSandwich (closed): use Function
+    var i := ingredient_closed(s)
 }
 ```
 
-
-## Idea: Dynamic Dispatch Method
-
-
-```kotlin
-open class A()
-open class B(): A()
-open class C(): B()
-
-class Super(){
-    open val field : A
-}
-
-class Mid1() : Super() {
-    override val field: B = B()
-}
-
-class Mid2() : Super() {
-    override val field: B = C()
-}
-
-class Mid3() : Super() {
-    override val field: C = C()
-}
-
-class Mid4() : Super() {
-    // This is a var field
-    override var field : D = D()
-}
-
-fun main(s : Super) {
-    a.field // what should be done here?
-}
-
-// viper
-
-function Mid1_field(a: Ref) returns (ret: Ref)
-    ensures subtype(ret, B)
-
-function Mid2_field(a: Ref) returns (ret: Ref)
-    ensures subtype(ret, B)
-
-function Mid3_field(a: Ref) returns (ret: Ref)
-    ensures subtype(ret, C)
-
-method super_field(a: Ref) returns (ret: Ref) 
-    ensures isType(a, Mid1) ==> Mid1_field(a)
-    ensures isType(a, Mid2) ==> Mid2_field(a)
-    ensures isType(a, Mid3) ==> Mid3_field(a)
-    ensures subtype(ret, A) //default condition, Is this really needed?
-```
-
-
-# Conclusions
-
-
-## Overrideable val fields on non-sealed structures can never be represented using function
-
-This can be seen in this example: 
+## Mutable Inheritance Overriding val with var 
 
 ```kotlin
 interface Test {
-    val field : Any
+    val field: Int
 }
 
-class A : Test {
-    override val field: Any = Any()
-}
+class Mutable(override var field: Int) : Test
 
-class B : Test {
-    override var field : Any = Any()
-}
+class Immutable(override val field: Int) : Test
 
-fun main(t: Test) {
-    t.field
+fun test(x: Test) {
+    val r1 = x.field
+    when(x){
+        is Mutable -> x.field
+        is Immutable -> x.field
+    }
 }
 ```
-- If `t` is actually of type `A` we want to call a viper function. 
-- If `t` is of type `B` we want to have a normal field access.
-- This case distinction can not be made with a function, because the function is pure, but we might return different values for different reads (in the `B` case)
-- This case distinction can not be made with a method, because in viper, the method body is ignored. Hence information can only be enceded via postconditions which have to be pure.
 
-> Question: What should be done in this situations?
+
+```viper
+field f_Mutable: Ref
+
+method field_open(this: Ref) returns (ret: Ref)
+    ensures subtype(ret, Int)
+    ensures subtype(this, Immutable) ==> ret == field_closed(this)
+
+function field_closed(this: Ref) returns (ret: Ref)
+    ensures subtype(ret, Int)
+
+method test(x: Ref)
+    requires subtype(x, Test)
+    {
+        var r1 := field_open(x)
+
+        if () {
+            // Mutable
+            var r2 := x.f_Mutable
+        }
+        if () {
+            // Immutable
+            var r2 := field_closed(x)
+        }
+    }
+```
