@@ -110,7 +110,7 @@ method copy(obj: Ref)
 }
 ```
 
-As discussed in previous issues, we would like to assert permissions in preconditions. This is necessary, as we would like to call functions, which include casts and field accesses, in pure contexts. Otherwise, a comparision between objects could neveer be used in specifications. This results in: 
+As discussed in previous issues, we would like to assert permissions in preconditions. This is necessary, as we would like to call functions, which include casts and field accesses, in pure contexts. Otherwise, a comparison between objects could never be used in specifications. This results in: 
 
 ```
 method copy(obj: Ref)
@@ -160,7 +160,7 @@ function Sub1$equals(self: Ref, other: Ref): Bool
 }
 ```
 
-As defined in the Kotlin code, the function accepts `other` of type `Any`. However, to access the fields of other, a cast needs to be performed. This is a problem, we require additional permissions after a cast. Futhermore, these are only required if the given object is of the corresponding type. Currently, we resolve this by inhaling the additional permissions after the Kotlin cast. However, this would again result in an inpure function.
+As defined in the Kotlin code, the function accepts `other` of type `Any`. However, to access the fields of other, a cast needs to be performed. This is a problem, we require additional permissions after a cast. Furthermore, these are only required if the given object is of the corresponding type. Currently, we resolve this by inhaling the additional permissions after the Kotlin cast. However, this would again result in an impure function.
 
 We resolve this by using a trick here: We condition the required permissions on the actual type of `other`. The updated code is:
 
@@ -212,7 +212,7 @@ The next approach would be to introduce exact types: This means, we update the k
 - **Hierarchy**: Super <: Any, Sub1 <: Super, Sub2 <: Super
 - **Locations**: typeOf(sub1) == Sub1, typeOf(sub2) == Sub2
 
-This now allows us to verify the function if we only pass types that are in one continuous hierarchy, i.e. lie on a single inheritance chain. But again, it cannot prove the previous code example. If we combine both appraoches, everything in this document so far can be verified, but one can easily construct more complicated hierarchies which cannot be verified. We continue here by disregarding the finalness and keeping the exact type approach in min. The reason will become clear in the next section.
+This now allows us to verify the function if we only pass types that are in one continuous hierarchy, i.e. lie on a single inheritance chain. But again, it cannot prove the previous code example. If we combine both approaches, everything in this document so far can be verified, but one can easily construct more complicated hierarchies which cannot be verified. We continue here by disregarding the finalness and keeping the exact type approach in mind. The reason will become clear in the next section.
 
 ## Introducing non-inheritance reasoning
 
@@ -445,7 +445,7 @@ method bar(sup: Ref)
 }
 ```
 
-When `bar` is called in turn, the same propagation applies to its caller, and so on — until a call site is reached where the exact type of the argument is known (e.g. directly after construction), at which point the relevant conditional permission collapses to a concrete one and the chain terminates.
+When `bar` is called in turn, the same propagation applies to its caller, until a call site is reached where the exact type of the argument is known (e.g. directly after construction), at which point the relevant conditional permission collapses to a concrete one and the chain terminates.
 
 A harder case is mutual recursion:
 
@@ -459,7 +459,7 @@ fun rec2(sup: Super) {
 }
 ```
 
-As the subtyping relation defined by us (and including the extension with the Nagini axioms) forms a forms a well-founded partial order with finite ascending chains, the calculation of this might be cumbersome, but it is always possible. This should probably be an extension to this work.
+As the subtyping relation defined by us (and including the extension with the Nagini axioms) forms a well-founded partial order with finite ascending chains, the calculation of this might be cumbersome, but it is always possible. This should probably be an extension to this work.
 
 Why is this sound in Kotlin? To do this, we must have the guarantee that we actually know the exact type of each instance at some point, in order to not end up in a recursive loop of propagated conditional permissions. But this is guaranteed, as every object in Kotlin is created at some point, and at this point, the dynamic type can be found in the JVM. This, of course, excludes the type erasure in the case of generics, but as demonstrated by Nagini, this can also be handled with an even broader extension of the Runtime Type domain. However, this is beyond the scope of this proposal.
 
