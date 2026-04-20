@@ -1,5 +1,5 @@
 # Kotlin Immutable Fields in Viper
-The core goal of this design is to represent immutable fields differently than mutable fields. Since, immutable fields can not change their value, we want to map them to functions(pure) in viper.
+The core goal of this design is to represent immutable fields differently than mutable fields. Since, immutable fields can not change their value, we want to map them to viper functions.
 Mutable fields should generally be treated as heap-dependent and use a viper field. 
 
 Unfortunately, only looking at the declaration of the field is not enough. For example, an **immutable** field defined on an interface could be overritten by a **mutable** field.
@@ -19,13 +19,13 @@ First, we want to see to which viper construct different kind of field accesses 
 | Field Characteristic (at Static Type) 	| Viper Construct 	| Reasoning                                                                                                                	|
 |---------------------------------------	|-----------------	|--------------------------------------------------------------------------------------------------------------------------	|
 | Open val/var                              	| Method Call     	| Since it's open, a subclass might implement it with a custom getter or a var, requiring a method to abstract the access.	|
-| Closed val*                            	| Function Call   	| The value is stable and guaranteed not to be overridden by a mutable implementation.                                     	|
+| Closed val*                            	| Function Call   	| The value guaranteed not to be overridden.                                     	|
 | Closed var*                           	| Viper Field     	| Direct heap access is used. This requires the verifier to manage permissions.                               	|
 
 *For these two cases we also need to analyze getters. If there are getters defined by the user, then this getters have to be called instead of the call to the function/access to the viper field.
 
 ### Dispatch
-For this system, we will use the static type to choose the used viper construct. So that means, that if the static type is an interface then always the method is called. Even though the interface might not even have a default implementation for this.
+For this system, we will use the static type to choose the used viper construct. So that means, that if the static type is an interface then always the method is called. Even though the interface might not even have a default implementation for the accessed field.
 
 ### Example Closed Fields
 Let's have a look at closed fields
@@ -81,7 +81,7 @@ open class B() {
 Both field must be translated into a viper method, because the field could be overwritten. Hence we know nothing about the resulting value between reads. Also we can only ensure a subtype relation, because the field could be overwritten with a subtype.
 
 ```viper
-method field_immut_open(a: Ref) (ret: Ref)
+function field_immut_closed(a: Ref) (ret: Ref)
     ensures subtype(ret: X)
 
 method field_mut_open(a: Ref) (ret: Ref)
@@ -131,6 +131,7 @@ fun test(x: Shape) {
     }
     if (x is Square) {
         val x_square = x.sides
+        val x_color = x.color
     }
 }
 ```
@@ -161,7 +162,7 @@ field field_color : Ref
 
 // Used for Square
 function field_color_closed(a: Ref) : (ret: Ref) 
-    ensures subtype(ret, HSV)
+    ensures isType(this, Square) ==> subtype(ret, HSV)
 
 method field_color_open(a: Ref) : (ret: Ref)
     ensure subtype(ret, RGB)
@@ -171,18 +172,19 @@ The `test` method would then be translated into:
 
 ```viper
 method test(x: Ref) {
-    var p_shape = field_property_closed(x)
+    var prop_shape = field_property_open(x)
     if (*) {
         // x is Triangle
-        var p_triangle := field_property_closed(x)
+        var prop_triangle := field_property_closed(x)
         
         // unfold
-        s.field_color := RGB(255,0,255,1) 
+        x.field_color := RGB(255,0,255,1) 
     }
 
     if (*) {
         // x is Square
-        var p_square := field_property_closed(x)
+        var prop_square := field_property_closed(x)
+        var prop_color := field_color_closed(x)
     }
 }
 ```
@@ -201,7 +203,7 @@ axiom property_field {
 
 
 ### Limitations
-Due to the simplicity of this approach, we miss out on some connections. In the above example we can not verify that `p_shape == p_square` (reference equality). Even though, when we read ``p_square``, we know that the initial read `field_property_open` must have returned the same as `field_property_closed` will. 
+Due to the simplicity of this approach, we miss out on some connections. In the above example we can not verify that `prop_shape == prop_square` (reference equality). Even though, when we read ``prop_square``, we know that the initial read `field_property_open` must have returned the same as `field_property_closed` will. 
 
 This problem will be approached in the system #2. 
 
@@ -236,24 +238,24 @@ So the `test` method of the running example would look like this:
 ```viper
 method test(x: Ref) {
     // type is Shape, hence immutable field
-    var p_shape = field_property_open(x)
+    var prop_shape = field_property_open(x)
     if (*) {
         // x is Triangle, hence the field is immutable
-        var p_triangle := s.property
+        var prop_triangle := field_property_open(x)
         
         // color is mutable and closed
         // unfold
-        s.field_color := RGBA(255,0,255,1) 
+        x.field_color := RGBA(255,0,255,1) 
     }
 
     if (*) {
         // x is Square, field is immutable
-        var p_square := field_property_open(x)
+        var prop_square := field_property_open(x)
     }
 }
 ```
 
-This approach allows us to verify some that `p_shape == p_square`. Because when assigning the ``p_shape``, we have this case distinction for the different types. 
+This approach allows us to verify some that `prop_shape == prop_square`. Because when assigning the ``prop_shape``, we have this case distinction for the different types. 
 
 
 ### Pure Context
