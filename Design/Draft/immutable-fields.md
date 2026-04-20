@@ -1,258 +1,303 @@
 # Kotlin Immutable Fields in Viper
-The core goal is to map Kotlin fields to Viper based on whether they are stable (pure) or heap-dependent. By using the static type at the access point, we decide whether to use a Viper function, a method, or a direct field access.
+The core goal of this design is to represent immutable fields differently than mutable fields. Since, immutable fields can not change their value, we want to map them to functions(pure) in viper.
+Mutable fields should generally be treated as heap-dependent and use a viper field. 
 
-## Stability through Viper Functions
-For fields that are guaranteed to be immutable and final (closed), we use Viper functions.
-- Advantage: Functions are pure and do not require heap permissions (acc) to evaluate.
-- Construction: The relationship between the constructor argument and the field is established in the constructor's postcondition: `ensures A_field(res) == field_val`.
-- Subtype Specificity: For covariant overrides, the function uses implications to refine the return type: `ensures subtype(this, SubClass) ==> subtype(result, SpecificType)`
+Unfortunately, only looking at the declaration of the field is not enough. For example, an **immutable** field defined on an interface could be overritten by a **mutable** field.
 
-## Static Type Dispatch Logic
-Instead of generating complex ternary case distinctions at every call site, the verifier chooses the access method based on the static type of the field.
+Therefore we need to make the distinction not only on immutable vs mutable but also on open (can be overwritten) vs closed (can not be overwritten).
 
+# Overview
+This document consists of three parts: First, we will propose the simple system and discuss some shortcommings. 
+
+Second, we will suggest some improvements on how to improve the handling of subtyping. 
+
+And Finally, we propose some ideas to unify mutable and immutable field accesses, as well as the havoc system. 
+
+## 1. Basic System
+First, we want to see to which viper construct different kind of field accesses should be mapped. 
 
 | Field Characteristic (at Static Type) 	| Viper Construct 	| Reasoning                                                                                                                	|
 |---------------------------------------	|-----------------	|--------------------------------------------------------------------------------------------------------------------------	|
-| Closed val                            	| Function Call   	| The value is stable and guaranteed not to be overridden by a mutable implementation.                                     	|
-| Open val                              	| Method Call     	| Since it's open, a subclass might implement it with a custom getter or a var, requiring a method to abstract the access.	|
-| Closed var                            	| Viper Field     	| Direct heap access is used. This requires the verifier to manage permissions.                                 	|
-| Open var                              	| Method Call     	| To support dynamic dispatch and potential setters in subclasses, we wrap the access in a method.                         	|
-| Getter exists | Method Call | If there is a custom getter, then we always must use a method.
+| Open val/var                              	| Method Call     	| Since it's open, a subclass might implement it with a custom getter or a var, requiring a method to abstract the access.	|
+| Closed val*                            	| Function Call   	| The value is stable and guaranteed not to be overridden by a mutable implementation.                                     	|
+| Closed var*                           	| Viper Field     	| Direct heap access is used. This requires the verifier to manage permissions.                               	|
 
+*For these two cases we also need to analyze getters. If there are getters defined by the user, then this getters have to be called instead of the call to the function/access to the viper field.
 
-### Constructor
-In this example we have a closed class with a closed immutable field. This, can be represented by 
+### Dispatch
+For this system, we will use the static type to choose the used viper construct. So that means, that if the static type is an interface then always the method is called. Even though the interface might not even have a default implementation for this.
+
+### Example Closed Fields
+Let's have a look at closed fields
 ```kotlin
-class A(val field: Int)
+class A(){
+    val immut : Int = 1
+    var mut: Int = 2
+    val getter: Int 
+        get() = 3
+}
+
+fun test(a: A) {
+    val l_immut = a.immut
+    val l_mut = a.mut
+    val l_getter = a.getter
+}
 ```
+Since all fields are defined on a class they are closed.
+
+For the immutable field `val immut` we create a viper function:
+```viper
+function field_immut_closed(this: Ref) : (ret: Ref) 
+    ensures isType(ret, Int)
+
+method test(a: Ref){
+    var l_immut = field_immut_closed(a)
+}
+```
+We can ensure the exact type, because there is no possiblity of overwritting the field with a subtype. Viper function are always pure, which means that given the same receiver it will always return the same return value. 
+
+For the mutable field `var mut` we will use a viper field.
+```viper
+field field_mut: Ref
+
+method test(a: Ref) {
+    // unfold
+    var l_mut = a.field_mut
+}
+```
+This works similar to the classical system. Depending on if the reference to `a` is shared, we might need to use a `havoc` call. 
+
+For the mutable field `var getter` we need to call the getter which will be implemented as a method (because it could have side effects).
+
+### Example Open Fields
+Open fields are rather simple. We can not reason about the value, because the field can be overwritten and accessing it might even produce side effects.
+
+```kotlin
+open class B() {
+    open val immut : X = X()
+    open var mut : X = X()
+}
+```
+Both field must be translated into a viper method, because the field could be overwritten. Hence we know nothing about the resulting value between reads. Also we can only ensure a subtype relation, because the field could be overwritten with a subtype.
 
 ```viper
-function field_closed(rec: Ref) returns (ret: Ref)
-    ensures subtype(ret, Int)
+method field_immut_open(a: Ref) (ret: Ref)
+    ensures subtype(ret: X)
 
-method constructor_A(f_param: Ref) returns (res: Ref)
-    ensures field_closed(res) == f_param
+method field_mut_open(a: Ref) (ret: Ref)
+    ensures subtype(ret: X)
+
+method test(a: Ref) {
+    var l_immut = field_immut_open(a)
+    var l_mut = field_mut_open(a)
+}
 ```
 
-In the constructor, we must fix the function output to the supplied value.
+### Constructor
+In the previous system, when initializing a immutable field the postcondition of the constructor ensured that the value of the corresponding viper field is equal to the provided value. 
 
-### Open Val
-When a field is open, it might be overridden by a var or a custom getter in a subclass. At the call site, if the static type is the open class, we must use a Viper Method to allow for this potential dynamic behavior.
+With the new system this will change. Now we need to ensure the output of the `field_immut_closed` function.
 
+```
+method con(immut: a) : (ret: Ref) 
+    ensures field_immut_closed(ret) == immut //assigning the field
+```
+
+Otherwhise the constructor remains the same.
+
+### Inheritance
+For the inheritance, we will look at this running example:
 ```kotlin
 open class Shape{
-    open val sides: Int = 0
+    open val property: X = X() 
+    open val color: RGB = RGB(255,255,255) 
 }
+
 class Triangle() : Shape() {
-    override val sides : Int = 3
+    override val property : Y = Y()
+    override var color : RGBA = RGB(255,0,0,1) 
 }
 
 class Square() : Shape() {
-    override val sides: Int = 4
+    override val property: Z = Z()
+    override val color : HSV = HSV(360, 50, 50)
 }
 
-fun main(x: Shape) {
-    val s1 = x.sides
+fun test(x: Shape) {
+    val p_shape = x.property
     if (x is Triangle) {
-        val s2 = s.sides
+        val x_triangle = x.sides
+        x.color = RGBA(255,0,255,1) 
+    }
+    if (x is Square) {
+        val x_square = x.sides
     }
 }
 ```
+We have `Y <: X` and `Z <: X` but neihter `Y <: Z` nor `Z <: Y`
 
-Since the types can be covariantely overwritten, we need to make sure that the necessary type information is present. However in this example this is not really relevant.
+
+For every field, we need to check if it appears as a open, closed or both. In this example all fields appear as open and closed. Meaning we need both the function and method (for immutable fields) or method and field (for mutable fields).
+
+For the field `property` we need the following viper constructs:
 ```viper
+function field_property_closed(this: Ref) : (ret: Ref)
+    ensures isType(this, Triangle) ==> subtype(ret, Y)
+    ensures isType(this, Square) ==> subtype(ret, Z)
 
-method sides_open(this: Ref) returns (ret: Ref)
-    ensures subtype(ret, Int) // default, because of open
-
-function sides_closed(this: Ref) returns (ret: Ref)
-    ensures subtype(this, Triangle) ==> subtype(ret, Int)
-    ensures subtype(this, Square) ==> subtype(ret, Int)
-
-method main(x: Ref) {
-    var s1 := sides_open(x)
-    if (...) {
-        var s2 := sides_closed(x)
-    }
-}
+method field_property_open(this: Ref) : (ret : Ref)
+    ensures subtype(ret, X)
 ```
+Since the closed fields have different types. We must ensure the correct type in the postcondition. 
 
 
-### Covariant Overwrites
-```kotlin
-open class Meat
-class Salami : Meat()
+The closed is used, when we know that the accesses field is final (for `Square` and `Triangle`). 
 
-open class Sandwich {
-    open val ingredient: Meat = Meat()
-}
-
-class SalamiSandwich : Sandwich() {
-    override val ingredient: Salami = Salami()
-}
-
-fun test(s: SalamiSandwich) {
-    val i = s.ingredient 
-}
-```
-We need to add the type information as a postcondition to the method/function. 
+For the field `color` we need the following viper constructs. For the sake of example we have that `Triangle` has it as mutable property, where `Square` has it as immutable.
 
 ```viper
-// Method for the open base class
-method ingredient_open(this: Ref) returns (ret: Ref)
-    ensures subtype(ret, Meat)
+//Used for Triangle
+field field_color : Ref 
 
-// Function for the closed subclass access
-function ingredient_closed(this: Ref) returns (ret: Ref)
-    ensures subtype(this, SalamiSandwich) ==> subtype(ret, Salami)
+// Used for Square
+function field_color_closed(a: Ref) : (ret: Ref) 
+    ensures subtype(ret, HSV)
 
-method test(s: Ref) {
-    requires subtype(s, SalamiSandwich)
-    // Static type is SalamiSandwich (closed): use Function
-    var i := ingredient_closed(s)
-}
+method field_color_open(a: Ref) : (ret: Ref)
+    ensure subtype(ret, RGB)
 ```
 
-### Mutable Inheritance Overriding val with var 
-
-```kotlin
-interface Test {
-    val field: Int
-}
-
-class Mutable(override var field: Int) : Test
-
-class Immutable(override val field: Int) : Test
-
-fun test(x: Test) {
-    val r1 = x.field
-    when(x){
-        is Mutable -> x.field
-        is Immutable -> x.field
-    }
-}
-```
-In this example we show, how based on the static type we decide which construct to use.
+The `test` method would then be translated into:
 
 ```viper
-field f_Mutable: Ref
-
-method field_open(this: Ref) returns (ret: Ref)
-    ensures subtype(ret, Int)
-
-function field_closed(this: Ref) returns (ret: Ref)
-
-method test(x: Ref)
-    requires subtype(x, Test)
-    {
-        var r1 := field_open(x)
-
-        if () {
-            // Mutable
-            var r2 := x.f_Mutable
-        }
-        if () {
-            // Immutable
-            var r2 := field_closed(x)
-        }
+method test(x: Ref) {
+    var p_shape = field_property_closed(x)
+    if (*) {
+        // x is Triangle
+        var p_triangle := field_property_closed(x)
+        
+        // unfold
+        s.field_color := RGB(255,0,255,1) 
     }
-```
 
-
-## Idea: Read is Always a Method Call
-
-### Problem 1
-When we perform a smart cast or simlar, we do not get information over the cast. The following program will fail to verify
-
-```kotlin
-fun test(x: Test) {
-    val r1 = x.field
-    when(x){
-        is Mutable -> x.field
-        is Immutable -> {
-            val r2 = x.field
-            verify(r1==r2) // this will fail, because we are missing information from the first read.
-            }
+    if (*) {
+        // x is Square
+        var p_square := field_property_closed(x)
     }
 }
 ```
 
+### Functions without Postcondition
+The postconditions on the functions are not that nice. They could also be moved to an axiom. For example the postconditions of `field_property_closed` could be transformed into this axiom:
 
-At the moment there is a missing connection between multiple reads if the type information in between changed. Respectively, when we use the `field_open` read, we learn nothing about the the potential values of different types. For example in the example above the equality `r1 == r2` should hold. However at the moment this would not verify. 
-
-### Suggestion 1: Add Subtype Distinction in Open Read Method
-A solution would be, to add the known (final) subtype cases to the method for the field access. The above example would change to this:
-
-```
-field f_Mutable: Ref
-
-method field_open(this: Ref) returns (ret: Ref)
-    ensures subtype(ret, Int) // default for potentially unknown subclasses
-    ensures subtype(this, Immutable) ==> subtype(ret, Int)
-    ensures subtype(this, Immutable) ==> ret == field_closed(this)
-
-function field_closed(this: Ref) returns (ret: Ref)
-```
-
-With this approach the `field_closed` function would never require to be called explicitely. We can also remove the postcondition from the function, since this information is now also given by the `field_open` method.
-
-So the `test` function would be routhly translated into: 
-```
-method test(x: Ref)
-    requires subtype(x, Test)
-    {
-        var r1 := field_open(x)
-
-        if () {
-            // Mutable
-            var r2 := x.f_Mutable
-        }
-        if () {
-            // Immutable
-            var r2 := field_open(x)
-        }
-    }
-```
-
-### Problem 2: Mutable fields
-About the same problem remains as before just only for mutable fields. In the case, where `x` is unique and we want to assert that `r1` and `r2` are equal, it will fail. 
-
-### Suggestion 2: All Read Accesses are Method Calls
-
-We could also add postconditions for final mutable fields, that say, if it is of this type and the receiver has write permissions(which means that it is unique), then the result will be the same as in the viper field.
-
-This would then look like this:
 ```viper
-field f_Mutable: Ref
+axiom property_field {
+    forall this: Ref :: { field_property_closed(this) }
+        isType(this, Triangle) ==> subtye(field_property_closed(this), Y)
+        isType(this, Square) ==> subtye(field_property_closed(this), Z)
 
-method field_open(this: Ref) returns (ret: Ref)
-    ensures subtype(ret, Int)
-    ensures subtype(this, Mutable) ==> subtype(ret, Int)
-    ensures subtype(this, Mutable) && [perm(this.f_Mutable) == write ==> ret == this.f_Mutable, true]
-    ensures subtype(this, Immutable) ==> subtype(ret, Int)
-    ensures subtype(this, Immutable) ==> ret == field_closed(this)
-
-function field_closed(this: Ref) returns (ret: Ref)
-```
-
-With this approach every read could be just a call to the method. And properties could be verified that requires some relation between two reads where in between type information was updated. The program would simplify to this:
-
-```
-method test(x: Ref)
-    requires subtype(x, Test)
-    {
-        var r1 := field_open(x)
-
-        if () {
-            // Mutable
-            var r2 := field_open(x)
-        }
-        if () {
-            // Immutable
-            var r2 := field_open(x)
-        }
     }
 ```
-An Additional benefit is, that this would remove the need of a havoc method. Because if the object is shared, then no permissions are available and therefore the method call gives no information about the value of the return type.
 
-I put together the code for this example and showed how some things could be verified. I used the viper online tool from ETH.  [HERE](https://viper.ethz.ch/viperonline/tool/silver?key=20260414181255ff2512377d325bc4de2d51)
+
+### Limitations
+Due to the simplicity of this approach, we miss out on some connections. In the above example we can not verify that `p_shape == p_square` (reference equality). Even though, when we read ``p_square``, we know that the initial read `field_property_open` must have returned the same as `field_property_closed` will. 
+
+This problem will be approached in the system #2. 
+
+
+## 2. Type Case Distinction
+This design is an extension of #1. We now want to add a type distinction to the open methods. The idea is to add all the known subtypes to the postcondition of the `open` method. Also for the closed cases we will also add the value returned by the `closed` method to the post condition. Such that we can always call the `open` method. For the above example this would look like this:
+
+```viper
+function field_property_closed(this: Ref) : (ret: Ref)
+    ensures isType(this, Triangle) ==> subtype(ret, Y)
+    ensures isType(this, Square) ==> subtype(ret, Z)
+
+method field_property_open(this: Ref) : (ret : Ref)
+    ensures subtype(ret, X) //open cases
+    
+    ensures isType(this, Triangle) ==> ret == field_property_closed(this)
+    ensure isType(this, Triangle) ==> subtype(ret, Y)
+    
+    ensures isType(this, Square) ==> ret == field_property_closed(this)
+    ensure isType(this, Square) ==> subtype(ret, Z)
+```
+
+Now we can just call `field_property_open` instead of chooseing between the open and closed construct.
+
+With the approach we make the decision based on this:
+- immutable: Call `open` method
+- mutable + open: Call `open` method 
+- mutable + closed: Use viper field
+
+
+So the `test` method of the running example would look like this:
+```viper
+method test(x: Ref) {
+    // type is Shape, hence immutable field
+    var p_shape = field_property_open(x)
+    if (*) {
+        // x is Triangle, hence the field is immutable
+        var p_triangle := s.property
+        
+        // color is mutable and closed
+        // unfold
+        s.field_color := RGBA(255,0,255,1) 
+    }
+
+    if (*) {
+        // x is Square, field is immutable
+        var p_square := field_property_open(x)
+    }
+}
+```
+
+This approach allows us to verify some that `p_shape == p_square`. Because when assigning the ``p_shape``, we have this case distinction for the different types. 
+
+
+### Pure Context
+Unfortunately, there are still situations where we need to call the function. In pure context, we are not allowed to call methods. 
+
+### Move into Axiom
+Similar as before, we are able to move the subtyping information out of the postconditions into an axiom. 
+
+```viper
+axiom property_field {
+    forall this: Ref :: { field_property_closed(this) }
+        isType(this, Triangle) ==> subtye(field_property_closed(this), Y)
+        isType(this, Square) ==> subtye(field_property_closed(this), Z)
+}
+
+function field_property_closed(this: Ref) : (ret: Ref)
+
+method field_property_open(this: Ref) : (ret : Ref)
+    ensures subtype(ret, X)
+    ensures isType(this, Triangle) ==> ret == field_property_closed(this)
+    ensures isType(this, Square) ==> ret == field_property_closed(this)
+```
+
+## 3. Represent Every Field Read as Method Call
+The last stage of the design propsal is to also the reading of mutable + closed fields as method calls. Then every reading field access would be the same method call. 
+
+For this the postcondition of the `open` method must be updated:
+
+```viper
+method field_color_open(this: Ref) returns (ret: Ref)
+    ensures subtype(ret, RGB)
+    ensures isType(this, Triangle) ==> [perm(this.f_Mutable) == write ==> ret == this.field_color, true]
+    ensure isType(this, Triangle) ==> subtype(this, RGBA)
+    ensures isType(this, Square) ==> ret == field_color_closed(this)
+```
+The interesting case is, when the type is `Triangle`.  Then we ensure  
+
+`[perm(this.f_Mutable) == write ==> ret == this.field_color, true]`
+
+This is a Inhale-exhale assertions, the first part is used when the statement is inhaled and the second is used when the statement is exhaled. 
+When the caller makes the read access, we will inhale the implication. Meaning that, if we have write access to the field (it was unique), we will learn that the result is what is stored in the field. On the other hand, if we do not have write access, meaning we read a mutable field from a shared object, then we will learn nothing about the fields value. Which is equivalen to havocing the field.
+
+### Remarks
+- Adding havoc to this method call as well, might be too much. 
+- When there are some missing permissions (because of some mistakes in the conversion), we will get an error probabilty much later on, because the read value does not match the field. Until know, the error would happen at the field read because permissions where missing. This will make the debugging experience worse.
+- Additionally, we know what needs to be havoced and what not. It makes sense to directly do this in the plugin and not transfer the responsibility to viper. 
+- On the other hand, having just one method for field read lookes quite elegant... 
