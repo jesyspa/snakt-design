@@ -13,6 +13,9 @@ Second, we will suggest some improvements on how to improve the handling of subt
 
 And Finally, we propose some ideas to unify mutable and immutable field accesses, as well as the havoc system. 
 
+## Assumptions
+For simplicity, we assume that every reference that is hold is unique.
+
 ## 1. Basic System
 First, we want to see to which viper construct different kind of field accesses should be mapped. 
 
@@ -48,13 +51,14 @@ Since all fields are defined on a class they are closed.
 For the immutable field `val immut` we create a viper function:
 ```viper
 function field_immut_closed(this: Ref) : (ret: Ref) 
-    ensures isType(ret, Int)
+    requires isType(this, A)
+    ensures subtype(ret, Int)
 
 method test(a: Ref){
     var l_immut = field_immut_closed(a)
 }
 ```
-We can ensure the exact type, because there is no possiblity of overwritting the field with a subtype. Viper function are always pure, which means that given the same receiver it will always return the same return value. 
+We can ensure the subtype relation. Viper function are always pure, which means that given the same receiver it will always return the same return value. 
 
 For the mutable field `var mut` we will use a viper field.
 ```viper
@@ -81,10 +85,12 @@ open class B() {
 Both field must be translated into a viper method, because the field could be overwritten. Hence we know nothing about the resulting value between reads. Also we can only ensure a subtype relation, because the field could be overwritten with a subtype.
 
 ```viper
-function field_immut_closed(a: Ref) (ret: Ref)
+method field_immut_closed(this: Ref) (ret: Ref)
+    requires subtype(this, B)
     ensures subtype(ret: X)
 
-method field_mut_open(a: Ref) (ret: Ref)
+method field_mut_open(this: Ref) (ret: Ref)
+    requires subtype(this, B)
     ensures subtype(ret: X)
 
 method test(a: Ref) {
@@ -137,16 +143,20 @@ fun test(x: Shape) {
 ```
 We have `Y <: X` and `Z <: X` but neihter `Y <: Z` nor `Z <: Y`
 
-
-For every field, we need to check if it appears as a open, closed or both. In this example all fields appear as open and closed. Meaning we need both the function and method (for immutable fields) or method and field (for mutable fields).
+For every field, we need to create a function if it is open and a method if it is closed. 
 
 For the field `property` we need the following viper constructs:
 ```viper
-function field_property_closed(this: Ref) : (ret: Ref)
-    ensures isType(this, Triangle) ==> subtype(ret, Y)
-    ensures isType(this, Square) ==> subtype(ret, Z)
+function triangle_field_property_closed(this: Ref) : (ret: Ref)
+    requires subtype(this, Triangle) 
+    ensures subtype(ret, Y)
+
+function square_field_property_closed(this: Ref) : (ret: Ref)
+    requires subtype(this, Square) 
+    ensures subtype(ret, Z)
 
 method field_property_open(this: Ref) : (ret : Ref)
+    requires subtype(this, Shape)
     ensures subtype(ret, X)
 ```
 Since the closed fields have different types. We must ensure the correct type in the postcondition. 
@@ -161,10 +171,12 @@ For the field `color` we need the following viper constructs. For the sake of ex
 field field_color : Ref 
 
 // Used for Square
-function field_color_closed(a: Ref) : (ret: Ref) 
-    ensures isType(this, Square) ==> subtype(ret, HSV)
+function square_field_color_closed(a: Ref) : (ret: Ref) 
+    requires subtype(this, Square) 
+    ensures subtype(ret, HSV)
 
-method field_color_open(a: Ref) : (ret: Ref)
+method triangle_field_color_open(a: Ref) : (ret: Ref)
+    requires subtype(ret, Triangle)
     ensure subtype(ret, RGB)
 ```
 
@@ -190,14 +202,12 @@ method test(x: Ref) {
 ```
 
 ### Functions without Postcondition
-The postconditions on the functions are not that nice. They could also be moved to an axiom. For example the postconditions of `field_property_closed` could be transformed into this axiom:
+The postconditions on the functions are not that nice. They could also be moved to an axiom. For example the postconditions of `triangle_field_property_closed` could be transformed into this axiom:
 
 ```viper
 axiom property_field {
-    forall this: Ref :: { field_property_closed(this) }
-        isType(this, Triangle) ==> subtye(field_property_closed(this), Y)
-        isType(this, Square) ==> subtye(field_property_closed(this), Z)
-
+    forall this: Ref :: { triangle_field_property_closed(this) }
+        isType(this, Triangle) ==> subtye(triangle_field_property_closed(this), Y)
     }
 ```
 
