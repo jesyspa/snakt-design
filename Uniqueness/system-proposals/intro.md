@@ -325,4 +325,3 @@ they are generated.  The JVM provides this, but it is not
 the lens through which we want to look at this problem: we
 are interested in what the programmer can express, not what
 someone inspecting the JVM can see.)
-

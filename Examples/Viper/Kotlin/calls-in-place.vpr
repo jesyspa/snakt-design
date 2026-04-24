@@ -60,5 +60,3 @@ method foo(fo: FunctionObject, go: FunctionObject, b: Bool)
 
     nonconsuming(ro)
 }
-
-

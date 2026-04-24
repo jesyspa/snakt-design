@@ -20,4 +20,3 @@ loop as a whole doesn't decrease the value.
 
 Instead, we can put a label just before the loop and show that the value before
 the loop is a lower bound on the number of calls after each iteration.
-

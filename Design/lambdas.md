@@ -28,6 +28,3 @@ fun sumup(n: Int): Int {
 The `forEach` function is inline, so we can approach this example by unfolding its definition.
 However, here we want to explore what happens if we try to reason about this abstractly,
 without the help of inlining.
-
-
-

@@ -148,4 +148,3 @@ fun primaryCtorWithInit() {
 
 Generalization: All classes defining an `init`  block to initialize
 in-class body read-only properties with primary constructors. 
-

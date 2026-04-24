@@ -317,5 +317,3 @@ method getX(a: Any)
     ret := cast(anon1, NullableType(IntType()))
   }
 }
-
-
