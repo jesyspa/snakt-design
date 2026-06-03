@@ -157,3 +157,16 @@ When we translate this `ExpEmbedding` to viper, we can first convert the receive
 ## To Keep in Mind
 During the `toViper` translation we usually expect that a expression is returned. For example when we access a field we want that the `toViper` function returns a expression that can be used in for example a function argument. However, if we need to add a `fold` after it, we can not really look return the expression, because we need to ad it to the linearizer before we can add the fold. 
 Solution: It should always be possible to just add a assignment statement where we assign the result to an anon variable, then add the fold and return the new anon variable. This might lead to some unnecessary assignments.
+
+## Open Questions
+### How should a FirSafeCallExpression be treated?
+
+```
+a.nullable?.field
+```
+For the field access `(a.nullable).field` we have the following:
+- If we execute the field access, then we know that `a.nullable != null` hence we can unfold the receiver. 
+
+
+For the field access `(a.nullable)` we might need to `fold` if it is `null`
+- At the moment I believe we can treat it very similar to a field access. At least for unfolding. 
