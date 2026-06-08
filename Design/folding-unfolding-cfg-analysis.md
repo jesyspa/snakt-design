@@ -40,7 +40,7 @@ The first problem is that when we transform the `firExpression` to the `ExpEmbed
 
 But during the embedding of the property, we see the following uniqueness information:
 - `test1`: `b.a` is unqiue in both the in and out state.
-- `test2` : `b.a` is unique in both the in and out state.
+- `test2`: `b.a` is unique in both the in and out state.
 
 ### Unknown Variable
 ```kotlin
@@ -116,25 +116,7 @@ helper(arg1, arg2)
 ```
 Viper would complain here, because when calling `borrow` it needs to have access to the `unqiue` predicate of `b`.
 
-
-
-### Double Read
-We can not just fold back everytime we have read out a value, because of this counter example
-
-```kotlin
-fun consume(a: @Unique A) : Int
-
-fun test3(b: @Unique B) {
-    val x = consume(b.a2) + b.a.field
-}
-```
-For the left part of the `+`, we need to `unfold(b)` to have access to the unique predicate of `b.a2`. After we embedded the `consume(b.a2)`, we can not do `fold(b)` because we are lacking permissions. 
-So then when we want to perform the `b.a.field`, we only need to do `unfold(b.a)`, because `b` is already unfolded.
-
-After it, we need to fold `b.a` but not `b`. 
-
-
-
+At the moment, I don't see what a general solution without introducing new problems could be.
 
 ## CFG Analysis
 
