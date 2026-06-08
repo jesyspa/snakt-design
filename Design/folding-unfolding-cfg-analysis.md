@@ -1,6 +1,15 @@
 # Problem
 - We want to add the fold/unfolds on the field access expression. But during the translation from Fir to ExpEmbedding, we do not know if it needs to be folded or unfolded. The main reason is, that to fold back, we need to know if after the current statement is finished the path is partially moved or not.
 
+## When to fold and unfold
+I think the best way to connect the uniqueness information to the predicate state is the following:
+- If variable is unique, then we have access to the predicate.
+- If a variable is partially moved, then the predicate is unfolded.
+
+## When to decide?
+I think the best place to decide the folds+unfolds is in the translation from the `Fir` to `ExpEmbedding`. Since, the uniqueness analysis runs on the `Fir` it generates facts based on the `Fir` embeddings. So to use this information, we need to query it with `Fir` embeddings. If we do it in the `ExpEmbedding` or even later, we would need some way to extract the initial `Fir` embedding, which would be error prone and cumbersome. 
+
+
 ## Examples
 Classes:
 ```kotlin
@@ -9,25 +18,105 @@ class A(
 )
 
 class B(
-    var a : @Unique A
+    var a1 : @Unique A
     var a2: @Unique A
 )
 
 ```
 
 
-### Read vs Write
+### Unused Reads
 ```kotlin
 fun test1(b: @Unique B) {
     val x = b.a
 }
 fun test2(b: @Unique B) {
-    b.a = A()
+    b.a
 }
 ```
-The first problem is that when we transform the `firExpression` to the `ExpEmbedding` we don't know if the field access is a read or a write. 
+The first problem is that when we transform the `firExpression` to the `ExpEmbedding` we don't know what is happening to the field. 
 - In the `test1`, we need to only `unfold` - a `fold` would be wrong here, because `b` is partially moved. 
-- In the `test2`, we don't only need to `unfold` but also `fold` back.
+- In the `test2`, we need to do a `unfold` as well as a `fold`.
+
+But during the embedding of the property, we see the following uniqueness information:
+- `test1`: `b.a` is unqiue in both the in and out state.
+- `test2` : `b.a` is unique in both the in and out state.
+
+### Unknown Variable
+```kotlin
+fun test3() {
+    val x = A(5).field
+}
+```
+The expected viper would look like this:
+
+```viper
+anon := con_A(5)
+unfold(Unique(anon))
+x := anon.field
+```
+
+But if we perform the naive statement level approach, we would extract the paths, see that for the field access we need to unfold the receiver and then add the unfold statement with the receiver. Which would result in about following viper code:
+```viper
+unfold(Unique(con_A(5)))
+anon := con_A(5)
+x := anon.field
+```
+Which is not even valid viper code. 
+
+If we want to do it on the statement level and support this, then some book keeping has to be done. One could add the unfold statement with a `Shared` ExpEmbedding which refers to the result of the constructor. But this would not really be clean and probably introduce some bugs.
+
+### Complex receiver
+```kotlin
+fun test4(b1: @Unique B, b2: @Unique B, cond : Boolean) {
+    val x = (if (cond) b1 else b2).a1
+}
+```
+This is a similar example as before. When looking at the assignment, we can not decide what variable needs to be unfolded, because the receiver is complex.
+
+
+### Multiple Reads
+```kotlin
+fun consume(a1: @Unique A, a2: @Unique A) : Unit
+
+fun test5(b: @Unique B) {
+    consume(b.a1, b.a2)
+}
+```
+The expected viper for this would be:
+
+```viper
+unfold(unique(b))
+consume(b.a1, b.a2)
+```
+Doing this on a statement level would be finde, because the path extractor will realize that there is a common prefix and only unfold it once. However if we move the fold/unfold decition to the field access, then it becomes unclear how to stop the double unfolds.
+
+During translation of these two field accesses the uniqueness information will be the same for both. Hence they will perform the same unfold.
+
+
+### Nested Function Calls
+
+```kotlin
+fun borrow(b: @Unique @Borrowed B) : Int
+fun helper(a: @Unique A, value: Int)
+
+fun test6(b @Unique B) {
+    helper(b.a1, borrow(b))
+}
+```
+This code is actually fine. With both approaches (statement level vs field access level decition making) this will result in issues.
+
+The generated viper could would look like this:
+
+```viper
+unfold(unique(b))
+arg1 := b.a1
+arg2 := borrow(b)
+helper(arg1, arg2)
+```
+Viper would complain here, because when calling `borrow` it needs to have access to the `unqiue` predicate of `b`.
+
+
 
 ### Double Read
 We can not just fold back everytime we have read out a value, because of this counter example
