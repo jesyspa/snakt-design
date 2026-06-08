@@ -1,3 +1,8 @@
+# Related Work
+- `Nagini`: The verifier for Python does not provide automated fold + unfolds. The user needs to write it themselves.
+- `Prusti`: The verifier for Rust does provide automated fold + unfolds. They leverage pack and unpack statements given by the compiler which allow them to infer the necessary folds+unfolds.
+- `Gobra`: The verifier for Go does also reley a lot on user provided fold and unfolds statements.
+
 # Problem
 - We want to add the fold/unfolds on the field access expression. But during the translation from Fir to ExpEmbedding, we do not know if it needs to be folded or unfolded. The main reason is, that to fold back, we need to know if after the current statement is finished the path is partially moved or not.
 
@@ -18,7 +23,7 @@ class A(
 )
 
 class B(
-    var a1 : @Unique A
+    var a1: @Unique A
     var a2: @Unique A
 )
 
@@ -89,7 +94,7 @@ The expected viper for this would be:
 unfold(unique(b))
 consume(b.a1, b.a2)
 ```
-Doing this on a statement level would be finde, because the path extractor will realize that there is a common prefix and only unfold it once. However if we move the fold/unfold decition to the field access, then it becomes unclear how to stop the double unfolds.
+Doing this on a statement level would be finde, because the path extractor will realize that there is a common prefix and only unfold it once. However if we move the fold/unfold decision to the field access, then it becomes unclear how to stop the double unfolds.
 
 During translation of these two field accesses the uniqueness information will be the same for both. Hence they will perform the same unfold.
 
@@ -104,7 +109,7 @@ fun test6(b @Unique B) {
     helper(b.a1, borrow(b))
 }
 ```
-This code is actually fine. With both approaches (statement level vs field access level decition making) this will result in issues.
+This code is actually fine. With both approaches (statement level vs field access level decision  making) this will result in issues.
 
 The generated viper could would look like this:
 
