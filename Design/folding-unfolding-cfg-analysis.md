@@ -124,7 +124,7 @@ Viper would complain here, because when calling `borrow` it needs to have access
 At the moment, I don't see what a general solution without introducing new problems could be.
 
 ### Receiver Contains Statements
-```
+```kotlin
 class C(
     var b : @Unique B,
 )
@@ -141,6 +141,9 @@ fun test7(c1: @Unique C, c2: @Unique C, cond: Boolean) {
 This is just a nightmare...
 This example breaks the current uniqueness checker. It reports a uniqueness violation even thought the program is correct.
 
+This example also illustrates why we can not surface the folds to the statement level. The field access `y.a1` would be surfaced to the outermost assignment. But in that context, the `y` which should be unfolded does not even exist. 
+So in this example, the unfold must be placed between the variable declaration of `y` and the field access `y.a1`. This supports the approach which makes unfold decitions on the field access level.
+
 
 ## Should we pivot to a normalized program form?
 Complex receivers are a nightmare. What if we transform the program into a form, where every receiver is jsut a variable. This would result in the following:
@@ -148,7 +151,7 @@ Complex receivers are a nightmare. What if we transform the program into a form,
 - If we want to do the transformation on the `ExpEmbedding` level, we must move the analysis also there, because now we have variables that do not exist in the `Fir`.
 
 ## Path Abstraction
-What is our path abstraction? A path is an ordered list, where the first element is special:
+What is our path abstraction? A path is an ordered list:
 - The first element can be a variable or a method call/constructor.
 - All the other elements must be a property access.
 The first element could also be a complex expression like in `test4`, but such complex expression must always be simplified and transformed into mulitple paths.
@@ -156,7 +159,9 @@ The first element could also be a complex expression like in `test4`, but such c
 ## Information Needed to Fold and Unfold
 
 ### Unfold
-Since there is no clear bounday between statements in SnaKt we want to unfold on the field access level. 
+Since there is no clear bounday between statements in SnaKt we want to unfold on the field access level. To decide if something needs to be unfolded we need to know:
+- The uniqueness type of the receiver. If the receiver is partially moved, we do not need to unfold.
+- If the receiver is unique it is more complicated. It could be that it is the first access for that receiver, so it must be unfolded. However it could also be that before, in the same expression we already evaluated a sibling, which means that the parent is already unfolded. In that situation, the receiver may still be unique because only the assignment updates the uniqueness type (and this assignment happens only after the expression is evaluated).
 
 
 ### Fold
