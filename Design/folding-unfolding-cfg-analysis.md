@@ -123,6 +123,21 @@ Viper would complain here, because when calling `borrow` it needs to have access
 
 At the moment, I don't see what a general solution without introducing new problems could be.
 
+## Path Abstraction
+What is our path abstraction? A path is an ordered list, where the first element is special:
+- The first element can be a variable or a method call/constructor.
+- All the other elements must be a property access.
+The first element could also be a complex expression like in `test4`, but such complex expression must always be simplified and transformed into mulitple paths.
+
+## Information Needed to Fold and Unfold
+
+### Unfold
+Since there is no clear bounday between statements in SnaKt we want to unfold on the field access level. 
+
+
+### Fold
+
+
 ## CFG Analysis
 
 ### Unfolds
