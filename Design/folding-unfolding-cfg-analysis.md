@@ -139,6 +139,7 @@ fun test7(c1: @Unique C, c2: @Unique C, cond: Boolean) {
 }
 ```
 This is just a nightmare...
+This example breaks the current uniqueness checker. It reports a uniqueness violation even thought the program is correct.
 
 
 ## Should we pivot to a normalized program form?
