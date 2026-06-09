@@ -105,7 +105,7 @@ During translation of these two field accesses the uniqueness information will b
 fun borrow(b: @Unique @Borrowed B) : Int
 fun helper(a: @Unique A, value: Int)
 
-fun test6(b @Unique B) {
+fun test6(b: @Unique B) {
     helper(b.a1, borrow(b))
 }
 ```
@@ -122,6 +122,29 @@ helper(arg1, arg2)
 Viper would complain here, because when calling `borrow` it needs to have access to the `unqiue` predicate of `b`.
 
 At the moment, I don't see what a general solution without introducing new problems could be.
+
+### Receiver Contains Statements
+```
+class C(
+    var b : @Unique B,
+)
+
+fun test7(c1: @Unique C, c2: @Unique C, cond: Boolean) {
+    val x = (if (cond) {
+        val y = c1.b
+        y.a1
+    } else {
+        c1.b.a1
+    }).field
+}
+```
+This is just a nightmare...
+
+
+## Should we pivot to a normalized program form?
+Complex receivers are a nightmare. What if we transform the program into a form, where every receiver is jsut a variable. This would result in the following:
+- If we want to still do the analysis on the `Fir` level, we would need to transform the `Fir` AST which involes moving around a lot of information and will be error prone.
+- If we want to do the transformation on the `ExpEmbedding` level, we must move the analysis also there, because now we have variables that do not exist in the `Fir`.
 
 ## Path Abstraction
 What is our path abstraction? A path is an ordered list, where the first element is special:
