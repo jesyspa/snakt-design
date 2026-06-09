@@ -178,13 +178,11 @@ The first element could also be a complex expression like in `test4`, but such c
 ## Information Needed to Fold and Unfold
 
 ### Unfold
-Since there is no clear bounday between statements in SnaKt we want to unfold on the field access level. To decide if something needs to be unfolded we need to know:
-- The uniqueness type of the receiver. If the receiver is partially moved, we do not need to unfold.
-- If the receiver is unique it is more complicated. It could be that it is the first access for that receiver, so it must be unfolded. However it could also be that before, in the same expression we already evaluated a sibling, which means that the parent is already unfolded. In that situation, the receiver may still be unique because only the assignment updates the uniqueness type (and this assignment happens only after the expression is evaluated).
 
+When deciding to unfold we need to keep in mind that we see the uniqueness state of the last exit point. If we we encouter a path that might need to be unfolded (i.e. the receiver is unique) we need to track back to the entry point of the current update interval to see if a sibling path has been unfolded.
 
 ### Fold
-
+Folding works similar. On every exit point of a update interval we need to check the following. For every path in the current interval, check if there is a prefix that is completely unique. For each such fold-candidate traverse all the nested update scopes and see if a sibling is accessed before. If no sibling has been accessed, we can fold it. 
 
 ## CFG Analysis
 
