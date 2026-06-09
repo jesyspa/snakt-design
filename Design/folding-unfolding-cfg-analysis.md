@@ -150,6 +150,25 @@ Complex receivers are a nightmare. What if we transform the program into a form,
 - If we want to still do the analysis on the `Fir` level, we would need to transform the `Fir` AST which involes moving around a lot of information and will be error prone.
 - If we want to do the transformation on the `ExpEmbedding` level, we must move the analysis also there, because now we have variables that do not exist in the `Fir`.
 
+
+## Update Interval
+To make the right folding decisions we need to think about the places where uniqueness information is updated. This can happen on several situations:
+- assignments: The assignment can result in a moved, or make a object fully unique again.
+- function calls: Some arguments may become moved.
+
+A program can be devided into multiple update intervals, where each scope has an entry and a exit point. The invariant we want to have is that at every entry or exit point, every path that is partially moved is unfolded. 
+In between those points the invariant does not hold, for example:
+```kotlin
+val a = b.c
+```
+The entry and exit points are around assign statement. But during evaluation of the rhs expression we need to unfold `b`. At the unfold point we have the situation that `b` is unfolded but not yet partially moved.
+
+A program can be devided into multiple update intervals. There should never be a gap. Update intervals can be dested e.g. `test7`.
+Note: There is also the possiblity of having just an expression without an assignment. We shoud treat that as a update interval as well where we just "assign-to-nothin". 
+
+The entry and exit points of update intervals are around assignments and function calls. 
+(technically, exiting a scope can also have a effect on uniqueness types. But at the moment we do not track lifetimes)
+
 ## Path Abstraction
 What is our path abstraction? A path is an ordered list:
 - The first element can be a variable or a method call/constructor.
