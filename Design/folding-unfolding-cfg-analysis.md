@@ -144,11 +144,11 @@ This example breaks the current uniqueness checker. It reports a uniqueness viol
 This example also illustrates why we can not surface the folds to the statement level. The field access `y.a1` would be surfaced to the outermost assignment. But in that context, the `y` which should be unfolded does not even exist. 
 So in this example, the unfold must be placed between the variable declaration of `y` and the field access `y.a1`. This supports the approach which makes unfold decitions on the field access level.
 
-
-## Should we pivot to a normalized program form?
-Complex receivers are a nightmare. What if we transform the program into a form, where every receiver is jsut a variable. This would result in the following:
-- If we want to still do the analysis on the `Fir` level, we would need to transform the `Fir` AST which involes moving around a lot of information and will be error prone.
-- If we want to do the transformation on the `ExpEmbedding` level, we must move the analysis also there, because now we have variables that do not exist in the `Fir`.
+## Path Abstraction
+What is our path abstraction? A path is an ordered list:
+- The first element can be a variable or a method call/constructor.
+- All the other elements must be a property access.
+The first element could also be a complex expression like in `test4`, but such complex expression must always be simplified and transformed into mulitple paths.
 
 
 ## Update Interval
@@ -200,6 +200,15 @@ fun test9(b : @Unique B, b2 : @Unique B, cond: Boolean) {
 
 
 ```
+
+## Information Needed to Fold and Unfold (Informal)
+
+### Unfold
+
+When deciding to unfold we need to keep in mind that we see the uniqueness state of the last exit point. If we we encouter a path that might need to be unfolded (i.e. the receiver is unique) we need to track back to the entry point of the current update interval to see if a sibling path has been unfolded.
+
+### Fold
+Folding works similar. On every exit point of a update interval we need to check the following. For every path in the current interval, check if there is a prefix that is completely unique. For each such fold-candidate traverse all the nested update scopes and see if a sibling is accessed before. If no sibling has been accessed, we can fold it. 
 
 ## Formalism
 We denote the paths accessed in a program with $P$. A single path is denoted by $p^i \in P$. The path of length $m = |p^i|$ consists of the parts $p_0^i, p_1^i, \dots$. Also $parent(p^i) = p^i_{[1..|p^i| - 1]}$ 
@@ -265,137 +274,16 @@ $$
 It is almost identical to the unfolds but not totally. In the folds case we must no check the current interval $I$. If a parent interval has accessed a path that gives access to our path, then it is in the responsibility of this parent interval to fold it back. 
 
 
-
-## Path Abstraction
-What is our path abstraction? A path is an ordered list:
-- The first element can be a variable or a method call/constructor.
-- All the other elements must be a property access.
-The first element could also be a complex expression like in `test4`, but such complex expression must always be simplified and transformed into mulitple paths.
-
-## Information Needed to Fold and Unfold
-
-### Unfold
-
-When deciding to unfold we need to keep in mind that we see the uniqueness state of the last exit point. If we we encouter a path that might need to be unfolded (i.e. the receiver is unique) we need to track back to the entry point of the current update interval to see if a sibling path has been unfolded.
-
-### Fold
-Folding works similar. On every exit point of a update interval we need to check the following. For every path in the current interval, check if there is a prefix that is completely unique. For each such fold-candidate traverse all the nested update scopes and see if a sibling is accessed before. If no sibling has been accessed, we can fold it. 
-
-## CFG Analysis
-
-### Unfolds
-We are working on the level of statements. For each statement we need to do the following: 
-```kotlin
-fun unfolds(stmt) {
-    val unfoldedPaths = mutableMapOf()
-    val firFieldAccessUnfolds = mutableMapOf()
-    for (path in stmt.pathsInExecutionOrder) {
-        // We need to look at the prefix.
-        // Because when the path is a.b.c
-        // if we need to unfold something, then we need to only unfold a.b
-        val prefix = path.dropLast(1)
-        val uniqueness = prefix.uniquenessTypeIn
-
-        if (uniqueness == Shared) {
-            // nothing to unfold
-        }
-        if (uniqueness == Partially Moved) {
-            // path = `a.b` and prefix = `a` and `a.b2` = moved
-            // in this situation `a` is already unfolded
-        }
-
-        if (uniqueness == Unique) {
-            // we need to unfold this path, 
-            // iff we have seen it the first time. Otherwhise it was already unfolded.
-
-            if (unfoldedPaths.contains(prefix)) continue
-            unfold.add(prefix)
-
-            val firFieldAccess = getCorresondingFirElement(path[-2], path[-1])
-
-            firFieldAccessUnfolds(firFieldAccess)
-
-        }
-    }
-}
-
-```
-
-
-### Folds
-For folds we should be able to do it backwards. For all the paths that are afterwards unique we can fold them when we first see them (when traversing the statement backwards)
-
-```kotlin
-fun folds(stmt) {
-    val foldedPaths = mutableMapOf()
-    val firFieldAccessFold = mutableMapOf()
-    for (path in stmt.pathsInRecersedExecutionOrder) {
-        // We need to look at the prefix.
-        // Because when the path is a.b.c
-        // if we need to unfold something, then we need to only unfold a.b
-        val prefix = path.dropLast(1)
-        val uniqueness = prefix.uniquenessTypeOut
-
-        if (uniqueness == Shared) {
-            // nothing to unfold
-        }
-        if (uniqueness == Partially Moved) {
-            // path = `a.b` and prefix = `a` and `a.b2` = moved
-            // in this situation `a` can not be folded
-        }
-
-        if (uniqueness == Unique) {
-            // we need to unfold this path, 
-            // iff we have seen it the first time. Otherwhise it was already unfolded.
-
-            if (foldedPaths.contains(prefix)) continue
-
-
-            foldedPaths.add(prefix)
-
-            val firFieldAccess = getCorresondingFirElement(path[-2], path[-1])
-
-            firFieldAccessFolds(firFieldAccess)
-
-        }
-    }
-}
-
-```
-
-
-## Additional Advatages
-With the plan to actually insert the folds on the statement level (the old plan), there would be some annoying situations
-
-```kotlin
-fun test4() {
-    val x = A().field
-}
-```
-On the statement level, we kind of need to do `unfold(A())`. However this is not possible for many reasons. 
-
-But with the new approach, we would be in the following situation
-- During the fir -> ExpEmbedding translation, we created a `FieldAccess` `ExpEmbedding` that contains the information that it needs to unfold the receiver. 
-- This could look like this: 
-```
-FieldAccess(
-    receiver = MethodCall(...), 
-    field = Field(...), 
-    unfoldReceiver = true
-)
-```
-When we translate this `ExpEmbedding` to viper, we can first convert the receiver which will get us a variable. Then we can use this variable to add the unfold statement and finally, we can add the field access.
-
-
-
-## To Keep in Mind
-During the `toViper` translation we usually expect that a expression is returned. For example when we access a field we want that the `toViper` function returns a expression that can be used in for example a function argument. However, if we need to add a `fold` after it, we can not really look return the expression, because we need to ad it to the linearizer before we can add the fold. 
-Solution: It should always be possible to just add a assignment statement where we assign the result to an anon variable, then add the fold and return the new anon variable. This might lead to some unnecessary assignments.
-
 ## Open Questions
+
+### Should we pivot to a normalized program form?
+Complex receivers are a nightmare. What if we transform the program into a form, where every receiver is jsut a variable. This would result in the following:
+- If we want to still do the analysis on the `Fir` level, we would need to transform the `Fir` AST which involes moving around a lot of information and will be error prone.
+- If we want to do the transformation on the `ExpEmbedding` level, we must move the analysis also there, because now we have variables that do not exist in the `Fir`.
+
 ### How should a FirSafeCallExpression be treated?
 
-```
+```kotlin
 a.nullable?.field
 ```
 For the field access `(a.nullable).field` we have the following:
