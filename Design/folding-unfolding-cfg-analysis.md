@@ -164,10 +164,45 @@ val a = b.c
 The entry and exit points are around assign statement. But during evaluation of the rhs expression we need to unfold `b`. At the unfold point we have the situation that `b` is unfolded but not yet partially moved.
 
 A program can be devided into multiple update intervals. There should never be a gap. Update intervals can be dested e.g. `test7`.
-Note: There is also the possiblity of having just an expression without an assignment. We shoud treat that as a update interval as well where we just "assign-to-nothin". 
+Note: There is also the possiblity of having just an expression without an assignment. We shoud treat that as a update interval as well where we just "assign-to-nothing". 
+
+To be a bit more precise, the invariant we want to have is:
+At every update points, we hold the predicate to exactly the paths that are unique and where no sibling was accessed before in a strictly higher update interval   
 
 The entry and exit points of update intervals are around assignments and function calls. 
 (technically, exiting a scope can also have a effect on uniqueness types. But at the moment we do not track lifetimes)
+
+
+### Example
+```kotlin
+fun helper(a1: @Unique A, a2: @Unique A)
+
+fun test9(b : @Unique B, b2 : @Unique B, cond: Boolean) {
+                                // entry point [function]: We hold predicates to both `b` and `b2`
+    helper(
+        b.a1,
+        if (cond) {
+                                    // entry point [assignment]: we hold `b2`, `b` we don't have, since a decendent was accessed in the parent update interval.
+            val x = b2.a2
+                                    // exit point [assignment]: Here we hold no predicates, since `b2` is partially moved
+            b.a2
+        } else {
+                                    // entry point [assignment]: we hold `b2`. Note that the update intervals have a tree shape.
+                                    // For `b` we don't have the predicate (even though at the moment it is unique), because a sibling was accessed in a strict anchestor scope. 
+            val y = b.a2
+            b.a2 = y
+                                    // exit point [assignment]: we still hold `b2`
+            b.a2
+        }
+    )
+                                // exit point [function]: We hold no predicates
+}
+
+
+```
+
+
+
 
 ## Path Abstraction
 What is our path abstraction? A path is an ordered list:
