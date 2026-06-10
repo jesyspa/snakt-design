@@ -273,6 +273,21 @@ $$
 
 It is almost identical to the unfolds but not totally. In the folds case we must no check the current interval $I$. If a parent interval has accessed a path that gives access to our path, then it is in the responsibility of this parent interval to fold it back. 
 
+## Special Case
+The above approach does not work for situations where a parent update interval accesses the path $p$ and then there is a function call that borrows $parent(p)$. This does not work, because the borrowing function call will not have access to the predicate of $parent(p)$ because it already has been unfolded. An example could look like this:
+
+```kotlin
+func test10(b: @Unique B) {
+    helper(
+        b.a1,
+        borrow(b)
+    )
+}
+```
+This program is fine from the perspective of the uniqueness system. However the current folding logic would not work, because for `borrow` the unqiue predicate of `b` is not available since it was unfolded before in `b.a1`. 
+
+This can be resolved by the following strategy:
+If there is a function call with a borrowed argument `b`. Fitler the paths accessed before for all paths $P_b$ which have $b$ as prefix. Before calling the `borrow` function we need to fold them back and after the function returns we need to unfold them again. With that strategy the invariant for the update interval of the `borrow` call is preserved.
 
 ## Open Questions
 
