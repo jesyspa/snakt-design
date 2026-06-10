@@ -289,6 +289,18 @@ This program is fine from the perspective of the uniqueness system. However the 
 This can be resolved by the following strategy:
 If there is a function call with a borrowed argument `b`. Fitler the paths accessed before for all paths $P_b$ which have $b$ as prefix. Before calling the `borrow` function we need to fold them back and after the function returns we need to unfold them again. With that strategy the invariant for the update interval of the `borrow` call is preserved.
 
+### This does not Work
+The above proposal does not work. If the above system would be implemented, then it woud result in approximate this viper code:
+```viper
+  unfold acc(B_unique(b), write)
+  anon_2 := b.a1
+  fold acc(B_unique(b), write) //fold to use it in the borrow
+  anon_0 := borrow(b)
+  unfold acc(B_unique(b), write) //unfold to restore the invariant
+  anon_1 := helper(anon_2, anon_0)
+```
+Viper however does not accept this. Because it misses the predicate `unique(anon_2)`. When we unfold `b` the second time it is not given, that the `b.a1` points to the same heap location as `anon_2`.
+
 ## Open Questions
 
 ### Should we pivot to a normalized program form?
