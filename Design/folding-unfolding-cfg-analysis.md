@@ -202,7 +202,7 @@ fun test9(b : @Unique B, b2 : @Unique B, cond: Boolean) {
 ```
 
 ## Formalism
-We denote the paths accessed in a program with $P$. A single path is denoted by $p^i \in P$. The path of length $m = |p^i|$ consists of the parts $p_0^i, p_1^i, \dots$.
+We denote the paths accessed in a program with $P$. A single path is denoted by $p^i \in P$. The path of length $m = |p^i|$ consists of the parts $p_0^i, p_1^i, \dots$. Also $parent(p^i) = p^i_{[1..|p^i| - 1]}$ 
 We also introduce some predicates for the paths:
 - the ancestor predicate $anc(p^1, p^2)$ holds, iff $p^1$ is a strict prefix of $p^2$
 - the descendant predicate $dec(p^1, p^2)$ holds, iff $p^2$ is a strict prefix of $p^1$
@@ -213,6 +213,9 @@ Update intervals are denoted by $I \in \mathcal{U}$. The entry and exit points o
 We introduce some structures for the intervals as well:
 - $I_1 \subset I_2$ means that $I_1$ is contained inside $I_2$
 - $path(I) \subseteq P$, are all the paths contained in the interval $I$
+
+To argue about the order inside a interval, we introduce the following:
+- $p^1 \prec p^2$ denots that the path $p^1$ was accessed before $p^2$. 
 
 We also need some structures to connect to the uniqueness information and predicates:
 - $type(p, I_{loc})$ denotes the uniqueness type of the path $p$ at the entry point of the update interval $I$
@@ -241,6 +244,27 @@ $$
 $$
 
 (technically, only $in$ or $out$ would be enough, since the intervals are overlapping)
+
+### Unfolds
+During the program translation we might see that the path $p$ is being accessed in update interval $I$. We need to decide if we need to unfold the parent $parent(p)$. We need to unfold $parent(p)$ iff 
+
+$$
+type(parent(p), I_{in}) = unique \land (\forall_{I': I \subseteq I'} \forall_{p' \in path(I)} \lnot (p' \prec p \land p' \text{access } p))
+$$
+
+We only need to consider paths which are unique at the entry point. Otherwhise they are already unfolded. Since we can have nested statements we might have already unfolded the path (or a related one) which gives us access but did not yet result in a move. Therefore we need to check if ther is a path in any super update intervals that was accessed before and give access to our path.
+
+
+### Folds
+Folds is quite similar to unfolds. For path $p$ that has been accessed in update interval $I$ we need to decided if we need to fold $parent(p)$. We need to fold $parent(p)$ iff
+
+$$
+type(parent(p), I_{out}) = unique \land (\forall_{I': I \subset I'} \forall_{p' \in path(I)} \lnot (p' \prec p \land p' \text{access } p))
+$$
+
+It is almost identical to the unfolds but not totally. In the folds case we must no check the current interval $I$. If a parent interval has accessed a path that gives access to our path, then it is in the responsibility of this parent interval to fold it back. 
+
+
 
 ## Path Abstraction
 What is our path abstraction? A path is an ordered list:
