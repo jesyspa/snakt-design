@@ -201,8 +201,46 @@ fun test9(b : @Unique B, b2 : @Unique B, cond: Boolean) {
 
 ```
 
+## Formalism
+We denote the paths accessed in a program with $P$. A single path is denoted by $p^i \in P$. The path of length $m = |p^i|$ consists of the parts $p_0^i, p_1^i, \dots$.
+We also introduce some predicates for the paths:
+- the ancestor predicate $anc(p^1, p^2)$ holds, iff $p^1$ is a strict prefix of $p^2$
+- the descendant predicate $dec(p^1, p^2)$ holds, iff $p^2$ is a strict prefix of $p^1$
+- the sibling predicate $sib(p^1, p^2)$ holds, iff $p^1$ and $p^2$ are siblings i.e. $|p^1| = |p^2| = m > 1$ and $p^1_{[1..m-1]} = p^2_{[1..m-1]}$  
 
 
+Update intervals are denoted by $I \in \mathcal{U}$. The entry and exit points of the interval $I$ are denoted as $I_{in}$ and $I_{out}$.
+We introduce some structures for the intervals as well:
+- $I_1 \subset I_2$ means that $I_1$ is contained inside $I_2$
+- $path(I) \subseteq P$, are all the paths contained in the interval $I$
+
+We also need some structures to connect to the uniqueness information and predicates:
+- $type(p, I_{loc})$ denotes the uniqueness type of the path $p$ at the entry point of the update interval $I$
+- $pred(p, I_{loc})$ means that we hold the predicate of path $p$ at the entry or exit point.
+- `unique` we denote the type of a path which is completely unique i.e. no ancestor is moved.
+
+
+### Invariant
+Let's present out invariant in a formal way. 
+For this we need one more notion for paths: $p^1 \text{access} p^2$ means that whenever $p^1$ is accessible (i.e. its parent is unfolded) it must hold that $p^2$ is accessible as well. 
+
+
+$$p^1 \text{access } p^2 \iff p^1 = p^2 \lor anc(p^2, p^1) \lor \exists_{p \in P} ((anc(p, p^1) \lor p = p^1) \implies sib(p, p^2))$$
+
+The invariant at point $I_{loc}$ is:
+
+$$
+\text{Inv}(I_{loc}) := \forall_{p \in P} pred(p, I_{loc}) \iff type(p, I_{loc}) = unique \land \lnot \exists_{p' \in P} (p' \text{access } p \land \exists_{I \subset I'} p' \in path(I))
+$$
+
+
+The final invariant can be written as:
+
+$$
+\forall_{I \in \mathcal{U}}.  \text{Inv}(I_{in}) \land \text{Inv}(I_{out})
+$$
+
+(technically, only $in$ or $out$ would be enough, since the intervals are overlapping)
 
 ## Path Abstraction
 What is our path abstraction? A path is an ordered list:
