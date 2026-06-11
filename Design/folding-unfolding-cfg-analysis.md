@@ -151,7 +151,7 @@ What is our path abstraction? A path is an ordered list:
 The first element could also be a complex expression like in `test4`, but such complex expression must always be simplified and transformed into mulitple paths.
 
 
-## Update Interval
+## Scopes Interval
 To make the right folding decisions we need to think about the places where uniqueness information is updated. This can happen on several situations:
 - assignments: The assignment can result in a moved, or make a object fully unique again.
 - function calls: Some arguments may become moved.
@@ -300,6 +300,46 @@ The above proposal does not work. If the above system would be implemented, then
   anon_1 := helper(anon_2, anon_0)
 ```
 Viper however does not accept this. Because it misses the predicate `unique(anon_2)`. When we unfold `b` the second time it is not given, that the `b.a1` points to the same heap location as `anon_2`.
+
+## CFG Analysis
+
+The necessary information can be found with a forward analysis. We will track paths that are `reserved`. Reserved means that a path has been accessed and therefore being unfolded (even though it is not moved). 
+- The tracking state is `Path x Boolean`. If a path is true, it means that it is reserved.
+- The initial state ever path is mapped to `false`
+- On a update interval exit (function call exit, stmt assignment) we compare the `in` tracking state with the `out` tracking state. All the paths that are reserved in `out` but not `in` should be removed. From those paths all the paths that are unique** (in the `out`) should be attached to the `Fir` (assignment or method call)
+- On a path access, we must set the accessed path to `reserved`. We should mark the `Fir` property access as `unfold` if in the `in` state there is no sibling or decendant of a sibling as reserved. E.g. If we access `a.b` and we have `a.c -> rserved`, then it should not be added.
+- On a joining node we need to take the union of the parents `out`. 
+
+
+** the path is unique and none of the children are moved.
+
+### Example
+
+```kotlin
+val x = a1.b1
+// a1.b1 -> moved
+val y = (if (*) {
+    // a1.b1 -> moved
+    a2.b1 // taged as unfold
+    // a2.b1 -> moved, a2.b1 -> reserved
+} else {
+    // a1.b1 -> moved
+    a1.b2 // not taged as unfold
+    // a1.b1 -> moved, a1.b2 -> reserved
+}
+// a1.b1 -> moved, a2.b1 -> reserved, a1.b2 -> reserved
+).field // taged as unfold
+// a1.b1 -> moved, a2.b1 -> reserved, a1.b2 -> reserved, a2.b1.field -> reserved, a1.b2.field -> reserved
+
+// a1.b1 -> moved, a2.b1.field -> moved, a1.b2.field -> moved
+// All the reserved paths are not unique, henece nothing needs to be added to the unfold.
+```
+
+### Expected Information
+- On every exit point of an update interval (`assignments`, `function calls`) we need to have the paths that are no longer reserved and not partially moved.
+- On every field access we need a flag that is set to true, iff in `in` it is not reserved, but in the `out` it is and the path is not partially moved.
+- Would be nice: On every field access a flag that tells us if the receiver is unique. We would use this from the havoc. We can also fetch it from the `fir -> ExpEmbedding` translation, but I think in the analysis the access is simpler. But this might as well just bloat the analysis.
+
 
 ## Open Questions
 
