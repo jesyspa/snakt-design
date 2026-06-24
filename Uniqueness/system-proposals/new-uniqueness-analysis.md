@@ -152,7 +152,7 @@ Where:
 In addition to these operations, it is also possible to *rebase* a uniqueness
 substate onto another. Consider the following example in which we try to rebase 
 
-```
+```mermaid
 graph TB
     subgraph After
        root1["root"] --> a2
