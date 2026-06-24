@@ -160,14 +160,14 @@ graph TB
         a2["a: Unique"] --> b3["b: Unique"]
         b3 --> c3["c: Moved"]
         a2 --> d2["d: Reserved"]
-        b4["b"] --> c4["c: Unique"]
+        b4["b: Unique"] --> c4["c: Unique"]
         c4 --> c5["c: Moved"]
     end
 
     subgraph Before
        root2["root"] --> a1
        root2 --> b2
-        a1["a"] --> b1["b: Unique"]
+        a1["a: Unique"] --> b1["b: Unique"]
         b1 --> c1["c: Moved"]
         a1 --> d1["d: Reserved"]
         b2["b: Unique"] --> c2["c: Unique"]
