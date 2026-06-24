@@ -157,7 +157,7 @@ graph TB
     subgraph After
        root1["root"] --> a2
        root1 --> b4
-        a2["a"] --> b3["b: Unique"]
+        a2["a: Unique"] --> b3["b: Unique"]
         b3 --> c3["c: Moved"]
         a2 --> d2["d: Reserved"]
         b4["b"] --> c4["c: Unique"]
@@ -170,7 +170,7 @@ graph TB
         a1["a"] --> b1["b: Unique"]
         b1 --> c1["c: Moved"]
         a1 --> d1["d: Reserved"]
-        b2["b"] --> c2["c: Unique"]
+        b2["b: Unique"] --> c2["c: Unique"]
     end
 ```
 
