@@ -1,0 +1,361 @@
+# Related Work
+- `Nagini`: The verifier for Python does not provide automated fold + unfolds. The user needs to write it themselves.
+- `Prusti`: The verifier for Rust does provide automated fold + unfolds. They leverage pack and unpack statements given by the compiler which allow them to infer the necessary folds+unfolds.
+- `Gobra`: The verifier for Go does also reley a lot on user provided fold and unfolds statements.
+
+# Problem
+- We want to add the fold/unfolds on the field access expression. But during the translation from Fir to ExpEmbedding, we do not know if it needs to be folded or unfolded. The main reason is, that to fold back, we need to know if after the current statement is finished the path is partially moved or not.
+
+## When to fold and unfold
+I think the best way to connect the uniqueness information to the predicate state is the following:
+- If variable is unique, then we have access to the predicate.
+- If a variable is partially moved, then the predicate is unfolded.
+
+## When to decide?
+I think the best place to decide the folds+unfolds is in the translation from the `Fir` to `ExpEmbedding`. Since, the uniqueness analysis runs on the `Fir` it generates facts based on the `Fir` embeddings. So to use this information, we need to query it with `Fir` embeddings. If we do it in the `ExpEmbedding` or even later, we would need some way to extract the initial `Fir` embedding, which would be error prone and cumbersome. 
+
+
+## Examples
+Classes:
+```kotlin
+class A(
+    var field: @Unique Int
+)
+
+class B(
+    var a1: @Unique A
+    var a2: @Unique A
+)
+
+```
+
+
+### Unused Reads
+```kotlin
+fun test1(b: @Unique B) {
+    val x = b.a
+}
+fun test2(b: @Unique B) {
+    b.a
+}
+```
+The first problem is that when we transform the `firExpression` to the `ExpEmbedding` we don't know what is happening to the field. 
+- In the `test1`, we need to only `unfold` - a `fold` would be wrong here, because `b` is partially moved. 
+- In the `test2`, we need to do a `unfold` as well as a `fold`.
+
+But during the embedding of the property, we see the following uniqueness information:
+- `test1`: `b.a` is unqiue in both the in and out state.
+- `test2`: `b.a` is unique in both the in and out state.
+
+### Unknown Variable
+```kotlin
+fun test3() {
+    val x = A(5).field
+}
+```
+The expected viper would look like this:
+
+```viper
+anon := con_A(5)
+unfold(Unique(anon))
+x := anon.field
+```
+
+But if we perform the naive statement level approach, we would extract the paths, see that for the field access we need to unfold the receiver and then add the unfold statement with the receiver. Which would result in about following viper code:
+```viper
+unfold(Unique(con_A(5)))
+anon := con_A(5)
+x := anon.field
+```
+Which is not even valid viper code. 
+
+If we want to do it on the statement level and support this, then some book keeping has to be done. One could add the unfold statement with a `Shared` ExpEmbedding which refers to the result of the constructor. But this would not really be clean and probably introduce some bugs.
+
+### Complex receiver
+```kotlin
+fun test4(b1: @Unique B, b2: @Unique B, cond : Boolean) {
+    val x = (if (cond) b1 else b2).a1
+}
+```
+This is a similar example as before. When looking at the assignment, we can not decide what variable needs to be unfolded, because the receiver is complex.
+
+
+### Multiple Reads
+```kotlin
+fun consume(a1: @Unique A, a2: @Unique A) : Unit
+
+fun test5(b: @Unique B) {
+    consume(b.a1, b.a2)
+}
+```
+The expected viper for this would be:
+
+```viper
+unfold(unique(b))
+consume(b.a1, b.a2)
+```
+Doing this on a statement level would be finde, because the path extractor will realize that there is a common prefix and only unfold it once. However if we move the fold/unfold decision to the field access, then it becomes unclear how to stop the double unfolds.
+
+During translation of these two field accesses the uniqueness information will be the same for both. Hence they will perform the same unfold.
+
+
+### Nested Function Calls
+
+```kotlin
+fun borrow(b: @Unique @Borrowed B) : Int
+fun helper(a: @Unique A, value: Int)
+
+fun test6(b: @Unique B) {
+    helper(b.a1, borrow(b))
+}
+```
+This code is actually fine. With both approaches (statement level vs field access level decision  making) this will result in issues.
+
+The generated viper could would look like this:
+
+```viper
+unfold(unique(b))
+arg1 := b.a1
+arg2 := borrow(b)
+helper(arg1, arg2)
+```
+Viper would complain here, because when calling `borrow` it needs to have access to the `unqiue` predicate of `b`.
+
+At the moment, I don't see what a general solution without introducing new problems could be.
+
+### Receiver Contains Statements
+```kotlin
+class C(
+    var b : @Unique B,
+)
+
+fun test7(c1: @Unique C, c2: @Unique C, cond: Boolean) {
+    val x = (if (cond) {
+        val y = c1.b
+        y.a1
+    } else {
+        c1.b.a1
+    }).field
+}
+```
+This is just a nightmare...
+This example breaks the current uniqueness checker. It reports a uniqueness violation even thought the program is correct.
+
+This example also illustrates why we can not surface the folds to the statement level. The field access `y.a1` would be surfaced to the outermost assignment. But in that context, the `y` which should be unfolded does not even exist. 
+So in this example, the unfold must be placed between the variable declaration of `y` and the field access `y.a1`. This supports the approach which makes unfold decitions on the field access level.
+
+## Path Abstraction
+What is our path abstraction? A path is an ordered list:
+- The first element can be a variable or a method call/constructor.
+- All the other elements must be a property access.
+The first element could also be a complex expression like in `test4`, but such complex expression must always be simplified and transformed into mulitple paths.
+
+
+## Scopes Interval
+To make the right folding decisions we need to think about the places where uniqueness information is updated. This can happen on several situations:
+- assignments: The assignment can result in a moved, or make a object fully unique again.
+- function calls: Some arguments may become moved.
+
+A program can be devided into multiple update intervals, where each scope has an entry and a exit point. The invariant we want to have is that at every entry or exit point, every path that is partially moved is unfolded. 
+In between those points the invariant does not hold, for example:
+```kotlin
+val a = b.c
+```
+The entry and exit points are around assign statement. But during evaluation of the rhs expression we need to unfold `b`. At the unfold point we have the situation that `b` is unfolded but not yet partially moved.
+
+A program can be devided into multiple update intervals. There should never be a gap. Update intervals can be dested e.g. `test7`.
+Note: There is also the possiblity of having just an expression without an assignment. We shoud treat that as a update interval as well where we just "assign-to-nothing". 
+
+To be a bit more precise, the invariant we want to have is:
+At every update points, we hold the predicate to exactly the paths that are unique and where no sibling was accessed before in a strictly higher update interval   
+
+The entry and exit points of update intervals are around assignments and function calls. 
+(technically, exiting a scope can also have a effect on uniqueness types. But at the moment we do not track lifetimes)
+
+
+### Example
+```kotlin
+fun helper(a1: @Unique A, a2: @Unique A)
+
+fun test9(b : @Unique B, b2 : @Unique B, cond: Boolean) {
+                                // entry point [function]: We hold predicates to both `b` and `b2`
+    helper(
+        b.a1,
+        if (cond) {
+                                    // entry point [assignment]: we hold `b2`, `b` we don't have, since a decendent was accessed in the parent update interval.
+            val x = b2.a2
+                                    // exit point [assignment]: Here we hold no predicates, since `b2` is partially moved
+            b.a2
+        } else {
+                                    // entry point [assignment]: we hold `b2`. Note that the update intervals have a tree shape.
+                                    // For `b` we don't have the predicate (even though at the moment it is unique), because a sibling was accessed in a strict anchestor scope. 
+            val y = b.a2
+            b.a2 = y
+                                    // exit point [assignment]: we still hold `b2`
+            b.a2
+        }
+    )
+                                // exit point [function]: We hold no predicates
+}
+
+
+```
+
+## Information Needed to Fold and Unfold (Informal)
+
+### Unfold
+
+When deciding to unfold we need to keep in mind that we see the uniqueness state of the last exit point. If we we encouter a path that might need to be unfolded (i.e. the receiver is unique) we need to track back to the entry point of the current update interval to see if a sibling path has been unfolded.
+
+### Fold
+Folding works similar. On every exit point of a update interval we need to check the following. For every path in the current interval, check if there is a prefix that is completely unique. For each such fold-candidate traverse all the nested update scopes and see if a sibling is accessed before. If no sibling has been accessed, we can fold it. 
+
+## Formalism
+We denote the paths accessed in a program with $P$. A single path is denoted by $p^i \in P$. The path of length $m = |p^i|$ consists of the parts $p_0^i, p_1^i, \dots$. Also $parent(p^i) = p^i_{[1..|p^i| - 1]}$ 
+We also introduce some predicates for the paths:
+- the ancestor predicate $anc(p^1, p^2)$ holds, iff $p^1$ is a strict prefix of $p^2$
+- the descendant predicate $dec(p^1, p^2)$ holds, iff $p^2$ is a strict prefix of $p^1$
+- the sibling predicate $sib(p^1, p^2)$ holds, iff $p^1$ and $p^2$ are siblings i.e. $|p^1| = |p^2| = m > 1$ and $p^1_{[1..m-1]} = p^2_{[1..m-1]}$  
+
+
+Update intervals are denoted by $I \in \mathcal{U}$. The entry and exit points of the interval $I$ are denoted as $I_{in}$ and $I_{out}$.
+We introduce some structures for the intervals as well:
+- $I_1 \subset I_2$ means that $I_1$ is contained inside $I_2$
+- $path(I) \subseteq P$, are all the paths contained in the interval $I$
+
+To argue about the order inside a interval, we introduce the following:
+- $p^1 \prec p^2$ denots that the path $p^1$ was accessed before $p^2$. 
+
+We also need some structures to connect to the uniqueness information and predicates:
+- $type(p, I_{loc})$ denotes the uniqueness type of the path $p$ at the entry point of the update interval $I$
+- $pred(p, I_{loc})$ means that we hold the predicate of path $p$ at the entry or exit point.
+- `unique` we denote the type of a path which is completely unique i.e. no ancestor is moved.
+
+
+### Invariant
+Let's present out invariant in a formal way. 
+For this we need one more notion for paths: $p^1 \text{access} p^2$ means that whenever $p^1$ is accessible (i.e. its parent is unfolded) it must hold that $p^2$ is accessible as well. 
+
+
+$$p^1 \text{access } p^2 \iff p^1 = p^2 \lor anc(p^2, p^1) \lor \exists_{p \in P} ((anc(p, p^1) \lor p = p^1) \implies sib(p, p^2))$$
+
+The invariant at point $I_{loc}$ is:
+
+$$
+\text{Inv}(I_{loc}) := \forall_{p \in P} pred(p, I_{loc}) \iff type(p, I_{loc}) = unique \land \lnot \exists_{p' \in P} (p' \text{access } p \land \exists_{I \subset I'} p' \in path(I))
+$$
+
+
+The final invariant can be written as:
+
+$$
+\forall_{I \in \mathcal{U}}.  \text{Inv}(I_{in}) \land \text{Inv}(I_{out})
+$$
+
+(technically, only $in$ or $out$ would be enough, since the intervals are overlapping)
+
+### Unfolds
+During the program translation we might see that the path $p$ is being accessed in update interval $I$. We need to decide if we need to unfold the parent $parent(p)$. We need to unfold $parent(p)$ iff 
+
+$$
+type(parent(p), I_{in}) = unique \land (\forall_{I': I \subseteq I'} \forall_{p' \in path(I)} \lnot (p' \prec p \land p' \text{access } p))
+$$
+
+We only need to consider paths which are unique at the entry point. Otherwhise they are already unfolded. Since we can have nested statements we might have already unfolded the path (or a related one) which gives us access but did not yet result in a move. Therefore we need to check if ther is a path in any super update intervals that was accessed before and give access to our path.
+
+
+### Folds
+Folds is quite similar to unfolds. For path $p$ that has been accessed in update interval $I$ we need to decided if we need to fold $parent(p)$. We need to fold $parent(p)$ iff
+
+$$
+type(parent(p), I_{out}) = unique \land (\forall_{I': I \subset I'} \forall_{p' \in path(I)} \lnot (p' \prec p \land p' \text{access } p))
+$$
+
+It is almost identical to the unfolds but not totally. In the folds case we must no check the current interval $I$. If a parent interval has accessed a path that gives access to our path, then it is in the responsibility of this parent interval to fold it back. 
+
+## Special Case
+The above approach does not work for situations where a parent update interval accesses the path $p$ and then there is a function call that borrows $parent(p)$. This does not work, because the borrowing function call will not have access to the predicate of $parent(p)$ because it already has been unfolded. An example could look like this:
+
+```kotlin
+func test10(b: @Unique B) {
+    helper(
+        b.a1,
+        borrow(b)
+    )
+}
+```
+This program is fine from the perspective of the uniqueness system. However the current folding logic would not work, because for `borrow` the unqiue predicate of `b` is not available since it was unfolded before in `b.a1`. 
+
+This can be resolved by the following strategy:
+If there is a function call with a borrowed argument `b`. Fitler the paths accessed before for all paths $P_b$ which have $b$ as prefix. Before calling the `borrow` function we need to fold them back and after the function returns we need to unfold them again. With that strategy the invariant for the update interval of the `borrow` call is preserved.
+
+### This does not Work
+The above proposal does not work. If the above system would be implemented, then it woud result in approximate this viper code:
+```viper
+  unfold acc(B_unique(b), write)
+  anon_2 := b.a1
+  fold acc(B_unique(b), write) //fold to use it in the borrow
+  anon_0 := borrow(b)
+  unfold acc(B_unique(b), write) //unfold to restore the invariant
+  anon_1 := helper(anon_2, anon_0)
+```
+Viper however does not accept this. Because it misses the predicate `unique(anon_2)`. When we unfold `b` the second time it is not given, that the `b.a1` points to the same heap location as `anon_2`.
+
+## CFG Analysis
+
+The necessary information can be found with a forward analysis. We will track paths that are `reserved`. Reserved means that a path has been accessed and therefore being unfolded (even though it is not moved). 
+- The tracking state is `Path x Boolean`. If a path is true, it means that it is reserved.
+- The initial state ever path is mapped to `false`
+- On a update interval exit (function call exit, stmt assignment) we compare the `in` tracking state with the `out` tracking state. All the paths that are reserved in `out` but not `in` should be removed. From those paths all the paths that are unique** (in the `out`) should be attached to the `Fir` (assignment or method call)
+- On a path access, we must set the accessed path to `reserved`. We should mark the `Fir` property access as `unfold` if in the `in` state there is no sibling or decendant of a sibling as reserved. E.g. If we access `a.b` and we have `a.c -> rserved`, then it should not be added.
+- On a joining node we need to take the union of the parents `out`. 
+
+
+** the path is unique and none of the children are moved.
+
+### Example
+
+```kotlin
+val x = a1.b1
+// a1.b1 -> moved
+val y = (if (*) {
+    // a1.b1 -> moved
+    a2.b1 // taged as unfold
+    // a2.b1 -> moved, a2.b1 -> reserved
+} else {
+    // a1.b1 -> moved
+    a1.b2 // not taged as unfold
+    // a1.b1 -> moved, a1.b2 -> reserved
+}
+// a1.b1 -> moved, a2.b1 -> reserved, a1.b2 -> reserved
+).field // taged as unfold
+// a1.b1 -> moved, a2.b1 -> reserved, a1.b2 -> reserved, a2.b1.field -> reserved, a1.b2.field -> reserved
+
+// a1.b1 -> moved, a2.b1.field -> moved, a1.b2.field -> moved
+// All the reserved paths are not unique, henece nothing needs to be added to the unfold.
+```
+
+### Expected Information
+- On every exit point of an update interval (`assignments`, `function calls`) we need to have the paths that are no longer reserved and not partially moved.
+- On every field access we need a flag that is set to true, iff in `in` it is not reserved, but in the `out` it is and the path is not partially moved.
+- Would be nice: On every field access a flag that tells us if the receiver is unique. We would use this from the havoc. We can also fetch it from the `fir -> ExpEmbedding` translation, but I think in the analysis the access is simpler. But this might as well just bloat the analysis.
+
+
+## Open Questions
+
+### Should we pivot to a normalized program form?
+Complex receivers are a nightmare. What if we transform the program into a form, where every receiver is jsut a variable. This would result in the following:
+- If we want to still do the analysis on the `Fir` level, we would need to transform the `Fir` AST which involes moving around a lot of information and will be error prone.
+- If we want to do the transformation on the `ExpEmbedding` level, we must move the analysis also there, because now we have variables that do not exist in the `Fir`.
+
+### How should a FirSafeCallExpression be treated?
+
+```kotlin
+a.nullable?.field
+```
+For the field access `(a.nullable).field` we have the following:
+- If we execute the field access, then we know that `a.nullable != null` hence we can unfold the receiver. 
+
+
+For the field access `(a.nullable)` we might need to `fold` if it is `null`
+- At the moment I believe we can treat it very similar to a field access. At least for unfolding. 
